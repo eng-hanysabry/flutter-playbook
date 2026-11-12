@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: "Automatically initialize and synchronize the shared Flutter Playbook for every project task."
+---
+
 # ALWAYS-ON: Shared Flutter Playbook Bootstrap
 
 > **This rule runs automatically.** Apply it at the beginning of every user turn while a Flutter application repository is the active workspace. The developer must never mention the playbook, repeat setup instructions, or use a special prompt. The developer only describes the issue/task and, when asking for a fix, asks naturally to investigate/fix/solve it.
@@ -13,7 +18,7 @@ This small rule is the only playbook integration allowed in an application repos
 3. If missing, clone the configured company repository URL below. If it exists, verify its remote and fetch updates. Never overwrite, reclone over, reset, clean or delete an existing clone.
 4. Company playbook URL (the repository owner replaces this placeholder once):
 
-   `git@github.com:YOUR-ORG/flutter-playbook.git`
+   `https://github.com/eng-hanysabry/flutter-playbook.git`
 
 5. Match the application's normalized remote (`host/owner/repository`, treating SSH and HTTPS forms as equivalent) against the central project registry at `projects/registry/`.
 6. If not registered, derive a stable project ID from the canonical remote, check for collisions, and create a registry record on the project's playbook branch. Do not guess from the local directory name. If there is no unique `origin` remote or the identity is ambiguous, ask only for the missing project identity.
