@@ -68,6 +68,26 @@ Only perform Git writes when a lesson is genuinely created or materially improve
 8. After merge, fetch and synchronize the project branch with `origin/main` safely.
 9. If the lesson is duplicate and unchanged, do not create a commit, push or PR.
 
+## Automatic GitHub PR Workflow
+
+- **Authenticated execution:** Use the existing authenticated GitHub CLI (`gh`) machine account or `GH_TOKEN`.
+- **Non-interactive operations:** Execute all GitHub operations non-interactively; never block or pause automated or engineering turns for interactive login or credentials.
+- **Workflow trigger:** For every applicable engineering prompt involving bug fixes, feature changes, or architecture improvements, run the playbook knowledge workflow.
+- **Push target:** Push verified lesson and registry changes exclusively to the dedicated external project branch: `project/<project-id>`.
+- **PR deduplication:** Check for an existing open PR from `project/<project-id>` targeting `main`. If one exists, inspect and update it. Never create duplicate PRs for the same project branch.
+- **New PR creation:** If no open PR exists, create one with:
+  - Base: `main`
+  - Head: `project/<project-id>`
+  - Body: Include root cause, verified solution, regression test evidence, and affected project ID.
+- **Auto-merge policy:** Request host-native auto-merge (`gh pr merge --auto --merge`) only when auto-merge is explicitly enabled and all required repository checks/reviews are satisfied.
+- **Safety guarantees:**
+  - Never push directly to `main`.
+  - Never force-push (`--force`).
+  - Never bypass branch protections, status checks, or required reviews.
+  - Never create empty commits or empty PRs when no new verified knowledge was produced.
+  - Central knowledge remains in `flutter-playbook`; application source code and regression tests stay in the application repository.
+- **Failure handling:** If GitHub authentication or permissions fail, report the exact blocker with the required remediation command, and continue any safe local development without interrupting the developer.
+
 ## 7. Concurrency and recovery
 
 - Use an external worktree per project per developer. Never put it under an application repository.
