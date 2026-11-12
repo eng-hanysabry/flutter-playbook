@@ -68,25 +68,42 @@ Only perform Git writes when a lesson is genuinely created or materially improve
 8. After merge, fetch and synchronize the project branch with `origin/main` safely.
 9. If the lesson is duplicate and unchanged, do not create a commit, push or PR.
 
-## Automatic GitHub PR Workflow
+## Automatic GitHub PR Workflow — Git First
 
-- **Authenticated execution:** Use the existing authenticated GitHub CLI (`gh`) machine account or `GH_TOKEN`.
-- **Non-interactive operations:** Execute all GitHub operations non-interactively; never block or pause automated or engineering turns for interactive login or credentials.
-- **Workflow trigger:** For every applicable engineering prompt involving bug fixes, feature changes, or architecture improvements, run the playbook knowledge workflow.
-- **Push target:** Push verified lesson and registry changes exclusively to the dedicated external project branch: `project/<project-id>`.
-- **PR deduplication:** Check for an existing open PR from `project/<project-id>` targeting `main`. If one exists, inspect and update it. Never create duplicate PRs for the same project branch.
-- **New PR creation:** If no open PR exists, create one with:
-  - Base: `main`
-  - Head: `project/<project-id>`
-  - Body: Include root cause, verified solution, regression test evidence, and affected project ID.
-- **Auto-merge policy:** Request host-native auto-merge (`gh pr merge --auto --merge`) only when auto-merge is explicitly enabled and all required repository checks/reviews are satisfied.
-- **Safety guarantees:**
-  - Never push directly to `main`.
-  - Never force-push (`--force`).
-  - Never bypass branch protections, status checks, or required reviews.
-  - Never create empty commits or empty PRs when no new verified knowledge was produced.
-  - Central knowledge remains in `flutter-playbook`; application source code and regression tests stay in the application repository.
-- **Failure handling:** If GitHub authentication or permissions fail, report the exact blocker with the required remediation command, and continue any safe local development without interrupting the developer.
+### Authentication & Execution
+- Use existing Git Credential Manager authentication for all Git operations.
+- Do not require GitHub CLI (`gh`) and do not ask for interactive login during engineering tasks.
+- For GitHub REST API operations, reuse an already configured authenticated GitHub integration or API credential available to the agent.
+- Never extract credentials from credential stores, expose tokens, or save credentials in repositories.
+- If GitHub API authentication is unavailable, continue safe local work and Git push operations where authorized, then report the PR creation blocker clearly.
+
+### Git Operations
+Execute standard Git operations:
+- `git fetch origin`
+- `git status`
+- `git diff`
+- `git add`
+- `git commit`
+- `git push origin project/<project-id>`
+
+### Pull Request Automation
+For every applicable engineering prompt that produces new or improved verified knowledge:
+1. Check for an existing open PR from `project/<project-id>` targeting `main`.
+2. If one exists, update its branch and PR description as necessary without creating duplicates.
+3. Otherwise create a PR with:
+   - Base: `main`
+   - Head: `project/<project-id>`
+4. Include root cause, verified solution, regression test evidence, and affected project.
+5. Verify the resulting PR URL and status.
+6. Never create duplicate or empty PRs.
+
+### Safety Boundaries
+- Never push directly to `main`.
+- Never force-push (`--force`).
+- Never bypass reviews or branch protections.
+- Never claim a PR was created without verifying GitHub state.
+- Keep application source code and regression tests in the application repository.
+- Keep playbook knowledge in the external playbook repository.
 
 ## 7. Concurrency and recovery
 
