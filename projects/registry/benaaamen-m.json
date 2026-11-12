@@ -1,0 +1,19 @@
+{
+  "project_id": "benaaamen-m",
+  "display_name": "Benaa Amen",
+  "git_remotes": [
+    "github.com/geexar/benaaamen-m",
+    "https://github.com/geexar/benaaamen-m.git",
+    "git@github.com:geexar/benaaamen-m.git"
+  ],
+  "playbook_branch": "project/benaaamen-m",
+  "profile": {
+    "stack": [
+      "flutter",
+      "dart"
+    ],
+    "architecture": "to-be-assessed",
+    "flutter_version": "unknown",
+    "dart_version": "unknown"
+  }
+}
