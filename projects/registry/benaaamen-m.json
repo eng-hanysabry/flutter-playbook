@@ -12,8 +12,8 @@
       "flutter",
       "dart"
     ],
-    "architecture": "to-be-assessed",
-    "flutter_version": "unknown",
-    "dart_version": "unknown"
+    "architecture": "clean-architecture-bloc-modular",
+    "flutter_version": "3.35.1",
+    "dart_version": "^3.8.1 (runtime 3.9.0)"
   }
 }
