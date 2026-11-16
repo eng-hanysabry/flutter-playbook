@@ -31,10 +31,10 @@ At the beginning of every user turn in the active Flutter workspace:
 7. Execute the mandatory pre-investigation knowledge retrieval sequence before touching application code:
    a. Verify project ID and external worktree on `project/<project-id>`.
    b. Read `GLOBAL_AGENT_RULES.md` and `INDEX.md`.
-   c. Search Playbook topic files (`lessons/`) for existing lessons related to the reported issue, relevant concepts, and previous bug patterns.
+   c. Search Playbook topic files (`lessons/`) for existing lessons related to the reported issue, relevant concepts, implementation mechanisms, and previous bug patterns.
    d. Read all relevant lessons completely. If none found, report explicitly before proceeding.
-   e. Identify which lessons apply and explain their relevance internally before inspecting application code.
-   f. Only then begin application investigation, reproduction, and minimal implementation.
+   e. Identify which lessons apply, combine multiple lessons where evidence supports it, explain their relevance, and emit the visible `PLAYBOOK PREFLIGHT` block before inspecting application code.
+   f. Only then begin application investigation across relevant architectural layers, reproduction, and minimal implementation.
 
 Never claim a lesson was applied if read after implementation started. Execution order must prove pre-investigation reads occurred before application code was read or edited.
 
@@ -50,9 +50,9 @@ Compare confirmed root cause, triggers, lifecycle, categories, data flow, symbol
 - Same general issue + project-specific non-sensitive context: keep one general lesson and add only the unique context.
 - Unverified cause/fix: label candidate; do not publish as authoritative.
 
-## Regression tests
+## Regression tests, multi-layer analysis, and cross-feature consistency
 
-Application source fixes and executable tests stay in the application repository. Run relevant tests and report exact paths/results. The playbook stores reusable scenarios and references, not copies of application test source.
+Application source fixes and executable tests stay in the application repository. Investigate root causes across relevant layers (business logic, state management, event ordering, API synchronization, widget lifecycle, shared caches, navigation, recovery) using evidence. Where multiple features implement the same business operation, verify behavioral consistency without forcing identical architecture. Run relevant tests prioritizing key failure scenarios (rapid repeated actions, out-of-order responses, boundary conditions, cross-feature parity) and report exact paths/results. The playbook stores reusable scenarios and references, not copies of application test source.
 
 ## Git automation and manual PR ownership
 

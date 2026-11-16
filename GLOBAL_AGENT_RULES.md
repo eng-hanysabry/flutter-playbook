@@ -15,17 +15,29 @@ For EVERY task that investigates, reviews, modifies, tests, or refactors Flutter
    - Read `GLOBAL_AGENT_RULES.md` from the external worktree.
    - Read `INDEX.md` from the external worktree.
 3. **Search Playbook for related lessons:**
-   - Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptom keywords, architectural patterns, and previous bug patterns.
+   - Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptom keywords, implementation mechanisms, architectural patterns, and previous bug patterns.
 4. **Read all relevant lessons completely:**
    - Read all identified relevant lessons completely from start to finish (do not skim or read only titles/summaries).
    - If a relevant lesson cannot be found or read, report that explicitly before proceeding.
-5. **Identify & explain relevance internally:**
-   - Identify which previous lessons apply and explain their relevance internally before investigating or reading application code.
+5. **Identify, combine & explain relevance (Visible Playbook Preflight):**
+   - Identify which previous lessons apply (single or combined) and explain their relevance before investigating or reading application code.
+   - Combine multiple lessons when evidence supports their relevance to different aspects of the issue.
+   - Distinguish confirmed causes from hypotheses, and treat lessons as guidance rather than predetermined diagnoses.
+   - Emit the mandatory visible preflight block in the response before inspecting any application source code:
+     ```
+     PLAYBOOK PREFLIGHT
+     - Project ID: <project-id>
+     - Worktree and branch: <path> (<branch>)
+     - Relevant lessons found: <lesson-ids or 'None'>
+     - Why each lesson is relevant: <brief explanation per lesson>
+     - Investigation areas suggested by the lessons: <suggested focus areas>
+     - Knowledge retrieval completed.
+     ```
 6. **Begin application investigation & implementation:**
    - **ONLY THEN** begin application investigation, reproduction, and implementation.
 
 ### Strict Execution & Integrity Rules
-- **Strict Pre-Investigation Gate:** Never read, search, or modify application source files before completing steps 1 through 5.
+- **Strict Pre-Investigation Gate:** Never read, search, or modify application source files before completing steps 1 through 5 and emitting the visible PLAYBOOK PREFLIGHT.
 - **Zero Retroactive Claims:** Never claim a lesson was applied if it was read after application investigation or implementation started.
 - **Evidence-Based Order Proof:** Never claim pre-investigation reads occurred unless the execution order in the tool calls and execution trace explicitly proves it. Claiming pre-investigation reads when files were read after application code was read or edited is a critical integrity violation.
 - **Explicit Reporting of Missing Knowledge:** If a relevant lesson cannot be found or read, report that explicitly before proceeding.
@@ -41,20 +53,70 @@ For EVERY task that investigates, reviews, modifies, tests, or refactors Flutter
   - Always implement the smallest correct change that satisfies the user's request. Do not introduce unrelated refactoring or improvements.
   - For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
 
-## 2. Project and lesson retrieval
+## 2. Project and lesson retrieval & combining multiple lessons
 
 1. Identify the application by normalized Git `origin` remote, not its folder name.
 2. Resolve the project profile/registry record and external branch `project/<project-id>`.
 3. Synchronize the project branch with the latest shared `main` before reading lessons.
 4. Read `INDEX.md` first. Classify work by screen/feature category, lifecycle, data flow, engineering domain, shared components, source symbols, platform, SDK and package versions.
-5. Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptoms, architectural patterns, and previous bug patterns.
+5. Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptoms, implementation mechanisms, architectural patterns, and previous bug patterns.
 6. Read all identified relevant lessons completely from beginning to end (do not skim or read only titles/summaries). If a relevant lesson cannot be found or read, report that explicitly before proceeding.
-7. Identify which previous lessons apply and explain their relevance internally before investigating or reading application code.
-8. Only then begin application code inspection, reproduction, and minimal implementation.
-9. Apply only lessons whose applicability and exceptions match the current project. Never copy another project's API/business assumptions.
-10. Preserve the existing project architecture and conventions. Do not refactor unrelated code merely to match a preferred pattern.
+7. Identify how each retrieved lesson relates to the current issue. Combine multiple lessons when evidence supports their relevance across different architectural layers, data flows, or failure symptoms.
+8. Treat lessons as investigation guidance and hypotheses, not as predetermined diagnoses or complete solutions. A lesson can guide investigation without necessarily describing the ultimate root cause.
+9. Distinguish confirmed causes from hypotheses. Avoid forcing unrelated lessons into the investigation.
+10. Reuse existing knowledge instead of creating duplicate lessons.
+11. Apply only lessons whose applicability and exceptions match the current project. Never copy another project's API/business assumptions.
+12. Preserve the existing project architecture and conventions. Do not refactor unrelated code merely to match a preferred pattern.
 
-## 3. Mandatory duplicate and solution comparison
+## 3. Evidence-based root-cause investigation across layers
+
+The investigation must consider relevant causes across multiple layers based on available evidence, rather than assuming a single point of failure or blindly executing an inflexible checklist. Select relevant areas according to the issue and available evidence:
+
+- **Business logic and validation:** Inconsistent business constraints, missing boundary checks, divergent validation rules between forms or surfaces, unhandled edge-case domain states.
+- **State management and state transitions:** Illegal transitions, race conditions between user actions and server updates, unhandled intermediate states, inconsistent state mutations.
+- **Event ordering and asynchronous operations:** Concurrency races, event transformers dropping or buffering events unexpectedly, unawaited Futures, out-of-order completion.
+- **API requests, responses, and synchronization:** Optimistic updates colliding with in-flight HTTP requests, stale server responses overwriting newer user changes, improper retry or error handling, pagination synchronization failures.
+- **Widget lifecycle and rebuild behavior:** Subscriptions attached inside build methods, missing cleanup on dispose, unwanted rebuild loops, state lost across route push/pop.
+- **Shared providers, repositories, services, and caches:** Cache invalidation races, singleton or scoped service leaks, out-of-sync multi-consumer state, shared repository state mutations.
+- **Navigation and feature interactions:** State preserved or reset unintentionally during navigation, callbacks executing after widget unmount, deep linking state mismatch.
+- **Loading, failure, retry, and recovery behavior:** Incomplete error recovery, retry logic re-emitting stale parameters, failure states masking valid local modifications.
+
+### State-management-specific investigation
+When state management could be involved, investigate its actual behavior using concrete evidence rather than speculation:
+
+- **For BLoC / Cubit:**
+  - Event ordering and event transformers: concurrent versus sequential transformers (`droppable`, `restartable`, `sequential`, `concurrent`).
+  - Multiple events arriving while previous handlers are running.
+  - State emission and equality behavior (`Equatable.props`, distinct states, state emissions dropped due to missing fields).
+  - Filtering conditions: `listenWhen` and `buildWhen`.
+  - `BlocListener` placement, subscriptions, and lifecycle (e.g. duplicate listeners, listeners placed inside build methods or rebuildable child widgets).
+  - Multiple listeners responding to the same state change.
+  - Nested or shared BLoCs and provider scopes.
+  - State being overwritten by reloads or unrelated events.
+  - Listeners triggering additional events or causing feedback loops.
+  - Asynchronous handlers emitting stale results after subsequent user interactions.
+- **For other state-management solutions (Riverpod, Provider, MobX, Signals):**
+  - Investigate equivalent mechanisms (e.g. `ref.watch` vs `ref.listen`, provider scoping and overrides, `autoDispose` lifecycle, notification loops, synchronous vs asynchronous notification order) rather than applying BLoC-specific assumptions.
+- **Strict Evidence Requirement:** Do not assume that a listener, event transformer, or state-management mechanism is the cause without verified evidence from tracing, reproduction, or code inspection.
+
+## 4. Cross-feature behavioral consistency
+
+### Core Principle
+Different features may use different state-management architectures, but when they implement the same business operation, they must satisfy the same expected business behavior.
+
+For example, a Cart screen and a "Products You May Like" carousel or catalog may employ entirely different state-management approaches (e.g. BLoC with sequential event transformers versus a dedicated Cubit, Riverpod provider, or ValueNotifier), but quantity adjustments, item additions, removals, and boundary limits must yield consistent expected outcomes across both surfaces.
+
+### Mandatory Agent Actions
+When an issue touches or shares a business operation implemented across multiple features:
+1. **Identify shared business rules and expected behavior:** Determine the canonical business requirements (e.g. quantity boundaries, zero-handling, stock limits, optimistic synchronization).
+2. **Inspect each relevant implementation independently:** Examine the actual code of each feature rather than assuming they share the same architecture or defects.
+3. **Compare behavior rather than assuming identical architecture:** Evaluate whether each implementation satisfies the shared business expectations in its own context.
+4. **Identify whether defects share a root cause or have independent causes:** Determine whether the failure stems from a shared underlying component (e.g. shared repository/API) or independent feature-level implementation defects.
+5. **Fix each confirmed cause using the appropriate implementation:** Apply the fix tailored to each feature's architectural pattern without forcing a foreign pattern upon it.
+6. **Verify all affected implementations against the same expected behavior:** Run regression verification across all affected features to confirm behavioral consistency.
+7. **Preserve architectural autonomy:** Do not force unrelated features to use identical state management architectures. Parity of business behavior is required; homogeneity of implementation is not.
+
+## 5. Mandatory duplicate and solution comparison
 
 Before creating or updating a lesson, compare all relevant lessons using confirmed root cause, reproduction conditions, lifecycle, categories, data flow, symbols, packages, SDK/platform/architecture constraints, bad pattern, preferred solution, exceptions and regression behavior. Do not compare titles/error strings alone.
 
@@ -65,16 +127,29 @@ Before creating or updating a lesson, compare all relevant lessons using confirm
 - Unknown root cause, unverified fix or failed test: do not publish as approved knowledge. Keep it as a clearly marked candidate on the project branch, or report why no lesson can yet be recorded.
 - If two solutions both work, prefer the safer, simpler, better-tested and more compatible option. Keep both only when SDK/platform/architecture conditions justify variants.
 
-## 4. Fix and test application code
+## 6. Fix, test application code & scenario coverage
 
 1. Reproduce the issue when practical. Separate confirmed facts from hypotheses.
 2. Implement the requested fix using project conventions and applicable lessons.
 3. Add/update a real regression test in the application's existing test structure.
-4. Run that test and relevant existing tests. For new implementations, select tests by matching category, lifecycle, data flow, shared component, platform and project lessons. Do not blindly run every test; do not silently skip relevant scenarios.
-5. Report exact test paths and actual results: passed, failed, blocked or not run. A Given/When/Then lesson is not proof that an executable test exists.
-6. If a regression test cannot reasonably be automated, explain why and provide reproducible manual steps.
+4. **Select tests based on actual issue, relevant lessons, and confirmed root causes.**
+   Prioritize scenarios relevant to the failure and its regression risk (do not blindly test every theoretical scenario):
+   - **Rapid repeated user actions:** Quick taps (e.g. increment/decrement bursts), debounce/throttle stress.
+   - **Requests completing out of order:** Network responses arriving in non-chronological order.
+   - **Stale responses overwriting newer state:** Slower previous requests finishing after newer user changes.
+   - **Duplicate events or listeners:** Multiple triggers or duplicate subscriptions firing in response to a single user interaction.
+   - **Widget disposal and recreation:** Navigating back or unmounting widgets while asynchronous work or animations are pending.
+   - **Navigation away and back during an operation:** Pushing a new route and returning while an operation is in-flight.
+   - **Loading, success, failure, and retry:** Transitioning through all loading and error states, including recovery after failure.
+   - **Zero, minimum, and maximum values:** Boundary conditions (e.g. decrementing to zero, exceeding maximum stock, empty inputs).
+   - **Multiple independent items updating simultaneously:** Modifying multiple list items or entities concurrently.
+   - **Initial API loading while local changes are pending:** User interacting with cached or partial data while full remote data loads.
+   - **Shared state being modified by another feature:** State mutations originating from an external feature or background sync.
+5. **Verify cross-feature behavioral consistency:** Where multiple features implement the same business operation, verify their behavioral consistency against the expected business outcome.
+6. Report exact test paths and actual results: passed, failed, blocked, or not run. A Given/When/Then lesson is not proof that an executable test exists.
+7. If a regression test cannot reasonably be automated, explain why and provide reproducible manual steps.
 
-## 5. Capture knowledge after a resolved bug
+## 7. Capture knowledge after a resolved bug
 
 Knowledge capture is part of completing a resolved bug. Do not ask whether the developer wants to remember it.
 
@@ -87,7 +162,7 @@ Knowledge capture is part of completing a resolved bug. Do not ask whether the d
 7. Keep project-specific notes separate and non-sensitive. Never store secrets, credentials, private endpoints, customer PII or proprietary business rules in a repository accessible to other projects.
 8. Update `INDEX.md` only when a new routing topic or meaningful coverage is introduced.
 
-## 6. Automatic playbook Git workflow — manual PR and merge ownership
+## 8. Automatic playbook Git workflow — manual PR and merge ownership
 
 Only perform Git writes when a lesson is genuinely created or materially improved, or a necessary project registry/profile change is made.
 
@@ -130,7 +205,7 @@ Execute standard Git operations in the external project worktree:
 - Keep playbook knowledge in the external playbook repository.
 - Preserve unrelated changes and never create empty commits when there is no new or improved verified knowledge.
 
-## 7. Concurrency and recovery
+## 9. Concurrency and recovery
 
 - Use an external worktree per project per developer. Never put it under an application repository.
 - Never allow two local agents to edit the same worktree concurrently. If it is dirty/locked/in use, use another isolated clone/worktree or stop playbook writes; never overwrite changes.
@@ -138,19 +213,20 @@ Execute standard Git operations in the external project worktree:
 - Stop on conflicts and report them; do not auto-resolve by discarding either side.
 - If playbook access is unavailable, report the blocker honestly and continue the application task where safe.
 
-## 8. Scope and approval boundary
+## 10. Scope and approval boundary
 
 Automatically perform the requested application task, relevant prevention checks, regression tests and bug-lesson capture. Do not silently fix unrelated screens/modules, refactor broad architecture, upgrade dependencies or change unrelated behavior. Show exact proposed file locations, reason, benefit and risk, then ask the developer before optional related application fixes.
 
-## 9. Final response
+## 11. Final response
 
 After code-affecting work, report concisely:
 - detected project ID and verified worktree;
-- pre-investigation reads and lessons searched (with verified execution order);
-- internal relevance evaluation of lessons prior to inspecting application code;
-- fix and confirmed root cause;
+- pre-investigation reads and lessons searched/combined (with verified execution order);
+- visible Playbook preflight execution proof;
+- confirmed root cause across relevant layers (state management, API, lifecycle, business logic);
+- cross-feature behavioral consistency evaluation (when shared business operations are involved);
 - lessons searched and reused/created/updated/no-change decision;
-- regression test paths and exact outcomes;
+- regression test paths and exact outcomes across prioritized scenarios;
 - after a successful Playbook push:
   - project branch name (`project/<project-id>`);
   - commit hash;

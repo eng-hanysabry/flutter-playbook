@@ -22,10 +22,10 @@ The team member only needs to describe the issue/task and ask naturally to inves
 10. Execute the mandatory 6-step pre-investigation sequence before reading or modifying application code:
     a. Verify project ID and external worktree on `project/<project-id>`.
     b. Read `GLOBAL_AGENT_RULES.md` and `INDEX.md`.
-    c. Search the Playbook for existing lessons related to the reported issue, including relevant concepts, symptoms, and previous bug patterns.
+    c. Search the Playbook for existing lessons related to the reported issue, including relevant concepts, symptoms, implementation mechanisms, and previous bug patterns.
     d. Read all relevant lessons completely from beginning to end. If none found, report explicitly before proceeding.
-    e. Identify which lessons apply and explain their relevance internally before inspecting or reading application code.
-    f. Only then begin application code inspection, reproduction, and minimal implementation.
+    e. Identify which lessons apply (combining multiple lessons when relevant), explain their relevance, and emit the visible `PLAYBOOK PREFLIGHT` block before inspecting or reading application code.
+    f. Only then begin application code inspection, multi-layer root-cause investigation, and minimal implementation.
 
 Never claim a lesson was applied if it was read after implementation started. Never claim pre-investigation reads occurred without execution-order proof in tool calls.
 
@@ -39,11 +39,13 @@ All bootstrap paths and Git operations are outside application repositories. The
 - Unique project-specific context: record only non-sensitive additions and reference the shared lesson.
 - Unverified cause/fix or failed test: do not publish as authoritative knowledge.
 
-## Application fix and regression tests
+## Application fix, multi-layer investigation and regression tests
 
 - Fix only what the developer requested.
+- Investigate root causes across relevant layers (business logic, state transitions, event ordering, API synchronization, widget lifecycle, shared services/caches, navigation, recovery) using evidence, not assumptions. For state management (BLoC, Riverpod, Provider, etc.), trace actual event transformers, listeners, equality and state emission without guessing.
+- Enforce cross-feature behavioral consistency: different features implementing the same business operation (e.g. cart vs recommendations quantity updates) must satisfy the same expected business behavior without forcing identical architecture.
 - Add/update the executable regression test in the application's own `test/` directory and run it.
-- Select matching tests by category, lifecycle, data-flow and affected dependencies.
+- Select matching tests by category, lifecycle, data-flow and affected dependencies, prioritizing relevant scenarios (rapid repeated actions, out-of-order responses, stale responses overwriting newer state, boundary conditions, cross-feature parity).
 - Do not automatically push application source code. Its Git workflow remains the application's existing policy.
 
 ## Playbook commit, push and manual PR ownership
