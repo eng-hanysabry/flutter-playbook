@@ -2,7 +2,7 @@
 
 ## Developer experience
 
-The developer does not run setup commands, select a branch, mention the playbook, write lessons, pull/push Git, or create PRs. They open the application and describe the issue or requested feature in ordinary language. The always-on bootstrap rule handles the rest.
+The developer does not run setup commands, select a branch, mention the playbook, write lessons, or push playbook branches. They open the application and describe the issue or requested feature in ordinary language. The always-on bootstrap rule handles playbook commit and push to the project branch automatically, while PR creation and merging into `main` are owned by the user.
 
 Examples of normal requests:
 - "The orders list repeats page 2 after refresh. Please fix it."
@@ -40,19 +40,18 @@ Compare confirmed root cause, triggers, lifecycle, categories, data flow, symbol
 - Same cause + better verified solution: update existing canonical lesson once.
 - Same symptom + different confirmed cause: create a new lesson and cross-link.
 - Same general issue + project-specific non-sensitive context: keep one general lesson and add only the unique context.
-- Unverified cause/fix: label candidate; do not auto-merge as authoritative.
+- Unverified cause/fix: label candidate; do not publish as authoritative.
 
 ## Regression tests
 
 Application source fixes and executable tests stay in the application repository. Run relevant tests and report exact paths/results. The playbook stores reusable scenarios and references, not copies of application test source.
 
-## Git automation
+## Git automation and manual PR ownership
 
 Only for genuine playbook knowledge/registry changes:
-- commit and push to the external project branch;
-- reuse/update one PR or create it if none exists;
-- request automatic merge to `main` after review/check policy is satisfied;
-- confirm merge from the Git host;
-- sync the project branch with new `main`.
+- commit and push to the external project branch (`project/<project-id>`);
+- do not automatically create, update, auto-merge, or merge Pull Requests;
+- leave PR creation and merging into `main` to the user;
+- once the user merges to `main`, sync the project branch with the new `main` on subsequent turns.
 
-A duplicate lesson or no knowledge change causes no duplicate commit/push/PR. Never push application source as part of playbook Git operations.
+A duplicate lesson or no knowledge change causes no duplicate commit or push. Never push application source as part of playbook Git operations.

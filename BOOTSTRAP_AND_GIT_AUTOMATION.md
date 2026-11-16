@@ -29,7 +29,7 @@ All bootstrap paths and Git operations are outside application repositories. The
 - Same cause with a demonstrably better verified fix: update the canonical lesson.
 - Same symptom but different confirmed cause: add a separate lesson and cross-link it.
 - Unique project-specific context: record only non-sensitive additions and reference the shared lesson.
-- Unverified cause/fix or failed test: do not auto-merge as authoritative knowledge.
+- Unverified cause/fix or failed test: do not publish as authoritative knowledge.
 
 ## Application fix and regression tests
 
@@ -38,18 +38,18 @@ All bootstrap paths and Git operations are outside application repositories. The
 - Select matching tests by category, lifecycle, data-flow and affected dependencies.
 - Do not automatically push application source code. Its Git workflow remains the application's existing policy.
 
-## Playbook commit, push and PR
+## Playbook commit, push and manual PR ownership
 
 Only when a lesson is genuinely new or materially improved, or registry/project metadata must change:
 1. Stage only external playbook files.
 2. Commit and push to `project/<project-id>`.
-3. Reuse an existing open PR from that branch to `main`, otherwise create one.
-4. Request Git-host auto-merge using merge-commit strategy. For GitHub: `gh pr merge --auto --merge`.
+3. Do not create a new Pull Request, update an existing Pull Request, request auto-merge, or merge any Pull Request automatically.
+4. **The user owns the entire PR creation and merge process** and performs those actions manually.
 5. Never bypass required checks/reviews, use `--admin`, force-push or push directly to `main`.
-6. Report merged only when confirmed by the host; otherwise state waiting or blocked.
-7. After merge, synchronize project branch with `origin/main` safely.
+6. After a verified push, report the project branch name, commit hash, remote push verification, changed files, and lesson status, and state: `"Playbook changes have been pushed to project/<project-id>. PR creation and merging are intentionally left to the user."`
+7. After the user merges into `main`, synchronize the project branch with `origin/main` safely on subsequent turns.
 
-No knowledge change means no commit, push or PR. Auto-merge respects repository protections; configure GitHub auto-merge and branch rules once.
+No knowledge change means no commit or push.
 
 ## Concurrency and privacy
 

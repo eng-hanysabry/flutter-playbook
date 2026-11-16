@@ -13,11 +13,11 @@
 
 Compare confirmed root cause, trigger/reproduction conditions, affected lifecycle, category/data-flow tags, package/platform/version applicability, unsafe pattern, preferred solution, exceptions and regression behavior—not just title/error text.
 
-- Same root cause + materially same solution: reuse; no duplicate lesson, commit, push or PR.
+- Same root cause + materially same solution: reuse; no duplicate lesson, commit, or push.
 - Same root cause + better verified solution: improve the existing canonical lesson once.
 - Same symptom + different confirmed root cause: create a separate linked lesson.
 - Same general issue + unique non-sensitive project context: retain one general lesson and add only unique project notes.
-- Unclear cause or unverified fix: keep as a candidate; do not publish as an approved rule or auto-merge.
+- Unclear cause or unverified fix: keep as a candidate; do not publish as an approved rule.
 - Multiple solutions valid for different SDK/platform/architecture conditions: preserve explicit variants.
 
 ## Scope and privacy
