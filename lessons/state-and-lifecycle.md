@@ -75,6 +75,8 @@ void _updateLocalDishQty(
   - **Given** a dish in cart with `qty: 3` and an in-flight `ChangeDishQuantity(targetQty: 6)` request
   - **When** the user taps minus (`quantityNotifier.value = 5` and `ChangeDishQuantity(targetQty: 5)`) before the add response completes, or deletes the item (`targetQty: 0`)
   - **Then** `quantityNotifier.value` remains `5`, the BLoC dispatches a follow-up decrement of `1` once the add resolves, and deleting to `0` resets `dish.qty` to `0` and clears `cartItemId` in a single `DELETE` call
-- **Automated test:** `packages/services/resturant_home/test/resturant_home_test.dart` (`flutter test test/resturant_home_test.dart`)
-- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 5 unit and BLoC tests in `resturant_home_test.dart` passed
+- **Automated test:**
+  - `packages/services/resturant_home/test/resturant_home_test.dart` (`flutter test packages/services/resturant_home/test/resturant_home_test.dart`)
+  - `packages/services/cart/test/cart_quantity_test.dart` (`flutter test packages/services/cart/test/cart_quantity_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 5 unit and BLoC tests in `resturant_home_test.dart` and all 5 regression tests in `cart_quantity_test.dart` passed
 - **Related lessons:** None
