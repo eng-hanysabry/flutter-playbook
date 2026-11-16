@@ -5,11 +5,23 @@ These rules are stored in the independent `flutter-playbook` Git repository. The
 ## 1. Automatic behavior; no special user prompt
 
 - The bootstrap rule runs at the start of every user turn in an active Flutter application workspace.
-- The team member only describes the problem or requested work in ordinary language. Never ask them to mention the playbook, search lessons, create a branch, write documentation, or push.
-- For code-affecting work, identify the project, synchronize its external playbook branch, read `INDEX.md`, and retrieve all matching lessons before implementation.
-- For bug reports asking for a fix, perform the full fix/test/deduplicate/capture/push workflow below automatically.
-- For new feature/refactor/test/build work, apply relevant lessons and select relevant regression tests. Capture a new lesson only when a genuinely reusable defect or prevention pattern is discovered.
-- For informational questions, use relevant knowledge where it helps but do not change code or write a lesson without a reason.
+- For EVERY task involving Flutter/Dart application code—including bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements—automatically activate this workflow:
+  1. Locate and load the registered Playbook worktree for the current project.
+  2. Read `GLOBAL_AGENT_RULES.md`, `INDEX.md`, and all relevant existing lessons BEFORE investigating or modifying application code.
+  3. Follow the complete Playbook investigation, minimal-change implementation, regression testing, lesson deduplication, and Git commit/push workflow.
+  4. Push verified Playbook knowledge changes to `project/<project-id>` when a new or improved lesson is justified.
+  5. Never create or update Pull Requests, request auto-merge, or merge. PR creation and merging belong to the user.
+- **Mandatory activation:**
+  - The user does NOT need to mention the Playbook or paste a special execution prompt.
+  - A normal engineering request is sufficient to activate this workflow.
+  - Do not wait for the user to ask for investigation, testing, documentation, or Playbook updates.
+  - Do not treat the Playbook as optional guidance.
+- **Preflight failure:**
+  - If the Playbook worktree, required instructions, or relevant lessons cannot be located or read, stop before implementation and report the exact problem.
+  - Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded.
+- **Scope control:**
+  - Always implement the smallest correct change that satisfies the user's request. Do not introduce unrelated refactoring or improvements.
+  - For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
 
 ## 2. Project and lesson retrieval
 
