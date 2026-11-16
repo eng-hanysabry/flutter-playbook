@@ -48,7 +48,7 @@ The agent clones the central repository and creates/opens the project worktree a
 
 ## Normal operation
 
-At every user turn in an active Flutter workspace, the rule performs lightweight project identification and playbook sync. On code-affecting tasks, the agent reads relevant lessons before implementation. On a resolved bug, it must compare existing lessons, add/update the real regression test in the application, and capture the lesson in the external playbook. Only genuine knowledge changes create commits and pushes to `project/<project-id>`. Exact duplicates cause no Git write.
+At every user turn in an active Flutter workspace, the rule performs lightweight project identification and playbook sync. On code-affecting tasks, the agent MUST complete the mandatory 6-step pre-investigation sequence (verify project/worktree, read foundation rules, search relevant lessons by concepts/patterns, read lessons completely, explain relevance internally, and only then begin application code inspection/implementation). Never claim pre-investigation reads without tool-call execution order proof, and never claim a lesson was applied if read after implementation started. On a resolved bug, it must compare existing lessons, add/update the real regression test in the application, and capture the lesson in the external playbook. Only genuine knowledge changes create commits and pushes to `project/<project-id>`. Exact duplicates cause no Git write.
 
 The agent never creates, updates, auto-merges, or merges Pull Requests automatically, and never pushes directly to `main`. The user owns the entire PR creation and merge process.
 
