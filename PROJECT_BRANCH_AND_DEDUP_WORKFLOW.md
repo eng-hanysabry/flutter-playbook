@@ -28,7 +28,15 @@ At the beginning of every user turn in the active Flutter workspace:
 4. Identify or safely register the project.
 5. Ensure its external branch/worktree.
 6. Fast-forward the project branch and merge the latest `main`.
-7. Read index and matching lessons.
+7. Execute the mandatory pre-investigation knowledge retrieval sequence before touching application code:
+   a. Verify project ID and external worktree on `project/<project-id>`.
+   b. Read `GLOBAL_AGENT_RULES.md` and `INDEX.md`.
+   c. Search Playbook topic files (`lessons/`) for existing lessons related to the reported issue, relevant concepts, and previous bug patterns.
+   d. Read all relevant lessons completely. If none found, report explicitly before proceeding.
+   e. Identify which lessons apply and explain their relevance internally before inspecting application code.
+   f. Only then begin application investigation, reproduction, and minimal implementation.
+
+Never claim a lesson was applied if read after implementation started. Execution order must prove pre-investigation reads occurred before application code was read or edited.
 
 For implementation/bug-fix requests, continue with prevention, implementation and test selection. For informational requests, do not mutate code or knowledge unless appropriate.
 

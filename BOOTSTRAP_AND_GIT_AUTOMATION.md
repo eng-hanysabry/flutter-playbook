@@ -19,7 +19,15 @@ The team member only needs to describe the issue/task and ask naturally to inves
 7. If branch does not exist, create it from `origin/main` and push its initial branch.
 8. Verify worktree ownership, correct branch, clean status and no concurrent lock.
 9. Fast-forward from `origin/project/<project-id>`, then merge `origin/main` into the project branch to receive other projects' approved lessons.
-10. Read `GLOBAL_AGENT_RULES.md` and `INDEX.md`; load only matching topic content.
+10. Execute the mandatory 6-step pre-investigation sequence before reading or modifying application code:
+    a. Verify project ID and external worktree on `project/<project-id>`.
+    b. Read `GLOBAL_AGENT_RULES.md` and `INDEX.md`.
+    c. Search the Playbook for existing lessons related to the reported issue, including relevant concepts, symptoms, and previous bug patterns.
+    d. Read all relevant lessons completely from beginning to end. If none found, report explicitly before proceeding.
+    e. Identify which lessons apply and explain their relevance internally before inspecting or reading application code.
+    f. Only then begin application code inspection, reproduction, and minimal implementation.
+
+Never claim a lesson was applied if it was read after implementation started. Never claim pre-investigation reads occurred without execution-order proof in tool calls.
 
 All bootstrap paths and Git operations are outside application repositories. The only application integration is the always-on rule file or its equivalent in the tool's existing rules mechanism.
 

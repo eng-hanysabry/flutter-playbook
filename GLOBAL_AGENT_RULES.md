@@ -2,15 +2,33 @@
 
 These rules are stored in the independent `flutter-playbook` Git repository. The application only has the small always-on bootstrap rule at `.agents/rules/flutter-playbook-bootstrap.md` (or its equivalent in the tool's always-on rules mechanism). All knowledge and playbook Git operations remain external.
 
-## 1. Automatic behavior; no special user prompt
+## 1. Automatic behavior & mandatory 6-step gated sequence
 
-- The bootstrap rule runs at the start of every user turn in an active Flutter application workspace.
-- For EVERY task involving Flutter/Dart application code—including bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements—automatically activate this workflow:
-  1. Locate and load the registered Playbook worktree for the current project.
-  2. Read `GLOBAL_AGENT_RULES.md`, `INDEX.md`, and all relevant existing lessons BEFORE investigating or modifying application code.
-  3. Follow the complete Playbook investigation, minimal-change implementation, regression testing, lesson deduplication, and Git commit/push workflow.
-  4. Push verified Playbook knowledge changes to `project/<project-id>` when a new or improved lesson is justified.
-  5. Never create or update Pull Requests, request auto-merge, or merge. PR creation and merging belong to the user.
+The bootstrap rule runs at the start of every user turn in an active Flutter application workspace.
+For EVERY task that investigates, reviews, modifies, tests, or refactors Flutter/Dart application code—including bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements—you MUST execute this mandatory 6-step pre-investigation sequence in exact order before touching or inspecting application code:
+
+### Mandatory 6-Step Pre-Investigation Sequence (Strict Gate)
+1. **Verify project identity & external worktree:**
+   - Verify that the application's registered project ID matches the workspace.
+   - Verify that the external Playbook worktree exists, is clean, and is on branch `project/<project-id>`.
+2. **Read foundation rules:**
+   - Read `GLOBAL_AGENT_RULES.md` from the external worktree.
+   - Read `INDEX.md` from the external worktree.
+3. **Search Playbook for related lessons:**
+   - Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptom keywords, architectural patterns, and previous bug patterns.
+4. **Read all relevant lessons completely:**
+   - Read all identified relevant lessons completely from start to finish (do not skim or read only titles/summaries).
+   - If a relevant lesson cannot be found or read, report that explicitly before proceeding.
+5. **Identify & explain relevance internally:**
+   - Identify which previous lessons apply and explain their relevance internally before investigating or reading application code.
+6. **Begin application investigation & implementation:**
+   - **ONLY THEN** begin application investigation, reproduction, and implementation.
+
+### Strict Execution & Integrity Rules
+- **Strict Pre-Investigation Gate:** Never read, search, or modify application source files before completing steps 1 through 5.
+- **Zero Retroactive Claims:** Never claim a lesson was applied if it was read after application investigation or implementation started.
+- **Evidence-Based Order Proof:** Never claim pre-investigation reads occurred unless the execution order in the tool calls and execution trace explicitly proves it. Claiming pre-investigation reads when files were read after application code was read or edited is a critical integrity violation.
+- **Explicit Reporting of Missing Knowledge:** If a relevant lesson cannot be found or read, report that explicitly before proceeding.
 - **Mandatory activation:**
   - The user does NOT need to mention the Playbook or paste a special execution prompt.
   - A normal engineering request is sufficient to activate this workflow.
@@ -18,7 +36,7 @@ These rules are stored in the independent `flutter-playbook` Git repository. The
   - Do not treat the Playbook as optional guidance.
 - **Preflight failure:**
   - If the Playbook worktree, required instructions, or relevant lessons cannot be located or read, stop before implementation and report the exact problem.
-  - Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded.
+  - Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded in proper sequence.
 - **Scope control:**
   - Always implement the smallest correct change that satisfies the user's request. Do not introduce unrelated refactoring or improvements.
   - For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
@@ -29,9 +47,12 @@ These rules are stored in the independent `flutter-playbook` Git repository. The
 2. Resolve the project profile/registry record and external branch `project/<project-id>`.
 3. Synchronize the project branch with the latest shared `main` before reading lessons.
 4. Read `INDEX.md` first. Classify work by screen/feature category, lifecycle, data flow, engineering domain, shared components, source symbols, platform, SDK and package versions.
-5. Search all four topic files for related lessons. A bug can span multiple screen categories and lifecycle cycles.
-6. Apply only lessons whose applicability and exceptions match the current project. Never copy another project's API/business assumptions.
-7. Preserve the existing project architecture and conventions. Do not refactor unrelated code merely to match a preferred pattern.
+5. Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptoms, architectural patterns, and previous bug patterns.
+6. Read all identified relevant lessons completely from beginning to end (do not skim or read only titles/summaries). If a relevant lesson cannot be found or read, report that explicitly before proceeding.
+7. Identify which previous lessons apply and explain their relevance internally before investigating or reading application code.
+8. Only then begin application code inspection, reproduction, and minimal implementation.
+9. Apply only lessons whose applicability and exceptions match the current project. Never copy another project's API/business assumptions.
+10. Preserve the existing project architecture and conventions. Do not refactor unrelated code merely to match a preferred pattern.
 
 ## 3. Mandatory duplicate and solution comparison
 
@@ -124,7 +145,9 @@ Automatically perform the requested application task, relevant prevention checks
 ## 9. Final response
 
 After code-affecting work, report concisely:
-- detected project ID;
+- detected project ID and verified worktree;
+- pre-investigation reads and lessons searched (with verified execution order);
+- internal relevance evaluation of lessons prior to inspecting application code;
 - fix and confirmed root cause;
 - lessons searched and reused/created/updated/no-change decision;
 - regression test paths and exact outcomes;
@@ -137,4 +160,4 @@ After code-affecting work, report concisely:
   - state clearly: `"Playbook changes have been pushed to project/<project-id>. PR creation and merging are intentionally left to the user."`
 - optional related fixes awaiting approval.
 
-Do not report PR creation, merge readiness, or merge status as completed. If the push fails, report the actual error and do not claim success.
+Never claim a lesson was applied if it was read after application investigation or implementation started. Never claim pre-investigation reads occurred unless the execution order in the tool trace explicitly proves it. Do not report PR creation, merge readiness, or merge status as completed. If the push fails, report the actual error and do not claim success.
