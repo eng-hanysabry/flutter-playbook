@@ -24,23 +24,23 @@ The team member only describes the issue/task and asks naturally to investigate,
 - `projects/registry.json`: central remote-to-project identity map.
 - `projects/registry/`: one project registry record per project to reduce concurrent merge conflicts.
 - `LESSON_TEMPLATE.md`: consistent bug entry structure with concrete bad/good Dart examples and regression scenarios.
-- `BOOTSTRAP_AND_GIT_AUTOMATION.md`: bootstrap, push, PR and merge contract.
+- `BOOTSTRAP_AND_GIT_AUTOMATION.md`: bootstrap, push and manual PR ownership contract.
 - `PROJECT_BRANCH_AND_DEDUP_WORKFLOW.md`: project branch and duplicate handling.
 - `TEAM_MEMBER_USAGE.md`: examples of ordinary issue descriptions; not a required prompt.
 
 ## One-time owner setup
 
-1. Create a private Git repository named `flutter-playbook`.
+1. Create a central Git repository named `flutter-playbook`.
 2. Replace `git@github.com:YOUR-ORG/flutter-playbook.git` in `.agents/rules/flutter-playbook-bootstrap.md` with the real central repository URL.
 3. Push this package's contents to the central repository's `main` branch.
-4. Enable Git-host auto-merge and protect `main`. Require the reviews/checks appropriate to your team's risk. Use merge-commit strategy for persistent project branches.
+4. Protect `main` and require the reviews/checks appropriate to your team's risk. Use merge-commit strategy when manually creating and merging PRs from persistent project branches.
 5. Add only `.agents/rules/flutter-playbook-bootstrap.md` to each application repository, or install its contents into the application's existing always-on `rules.md`/agent rule. This bootstrap file is the sole permitted application-repository integration. If zero tracked app files is required, install it in each developer's global user rules instead.
 
 ## Team member setup
 
 Each developer needs:
-- Git access to the central private repository;
-- authenticated Git credentials and GitHub CLI if GitHub PR automation is used;
+- Git access to the central repository;
+- authenticated Git credentials for pushing to `project/<project-id>` (PR creation and merging are owned by the user);
 - the bootstrap rule loaded as always-on by the coding tool;
 - filesystem permission for the external playbook folder.
 
@@ -48,9 +48,9 @@ The agent clones the central repository and creates/opens the project worktree a
 
 ## Normal operation
 
-At every user turn in an active Flutter workspace, the rule performs lightweight project identification and playbook sync. On code-affecting tasks, the agent reads relevant lessons before implementation. On a resolved bug, it must compare existing lessons, add/update the real regression test in the application, and capture the lesson in the external playbook. Only genuine knowledge changes create commits/pushes/PRs. Exact duplicates cause no Git write.
+At every user turn in an active Flutter workspace, the rule performs lightweight project identification and playbook sync. On code-affecting tasks, the agent reads relevant lessons before implementation. On a resolved bug, it must compare existing lessons, add/update the real regression test in the application, and capture the lesson in the external playbook. Only genuine knowledge changes create commits and pushes to `project/<project-id>`. Exact duplicates cause no Git write.
 
-Auto-merge is requested only after quality/privacy checks pass and never bypasses main branch protection, reviews or CI. Report `MERGED` only after confirmed by the Git host.
+The agent never creates, updates, auto-merges, or merges Pull Requests automatically, and never pushes directly to `main`. The user owns the entire PR creation and merge process.
 
 ## Safety
 

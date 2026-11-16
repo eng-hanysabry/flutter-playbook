@@ -33,20 +33,18 @@ This small rule is the only playbook integration allowed in an application repos
 
 ## B. How to interpret every user prompt
 
-- The playbook workflow is implicit and mandatory; do not ask the user to say "follow the playbook", "remember this", or use a prepared issue prompt.
-- If the user reports a problem and asks to fix/solve/investigate it, perform the full diagnosis, fix, regression-test, duplicate-check and lesson-capture workflow.
-- If the user requests a new feature, screen, refactor, test or build change, inspect applicable lessons before implementation and run the relevant existing regression tests. Capture a lesson only if the work reveals a genuinely reusable failure/prevention pattern.
-- If the user asks an informational question about the active project, use relevant lessons to answer where helpful, but do not modify code, create tests, or write lessons unless requested or a bug is actually fixed.
-- For unrelated conversation that does not concern the active project, answer normally. Do not perform application or playbook writes.
-- Never require a team member to describe the playbook workflow in their prompt.
+- For EVERY task involving Flutter/Dart application code (bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements), automatically activate this workflow and read `GLOBAL_AGENT_RULES.md`, `INDEX.md`, and all relevant existing lessons BEFORE investigating or modifying application code.
+- **Mandatory activation:** The user does NOT need to mention the Playbook or paste a special execution prompt. Do not wait for the user to ask for investigation, testing, documentation, or Playbook updates, and do not treat the Playbook as optional guidance.
+- **Preflight failure:** If the Playbook worktree, required instructions, or relevant lessons cannot be located or read, stop before implementation and report the exact problem. Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded.
+- **Scope control:** Always implement the smallest correct change that satisfies the user's request without unrelated refactoring. For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
 
 ## C. Git and approval boundaries
 
 - All playbook Git operations use the external playbook clone/worktree. Never add lessons, scripts, submodules, worktrees, registry files or playbook Git remotes to the application repository.
 - The application fix and its executable regression tests remain in the application's existing repository and follow that repository's normal commit/push policy. Do not automatically push application code unless the developer's normal workflow explicitly authorizes it.
-- A genuine playbook knowledge change is committed and pushed automatically to `project/<project-id>`, then an existing PR is updated/reused or one PR to `main` is created. Request host-native auto-merge after quality, privacy and test checks pass.
-- A duplicate lesson creates no duplicate file, commit, push or PR. No knowledge change means no playbook Git write.
-- Never bypass branch protection, reviews, checks or merge queues. Never use `--admin`, force-push, reset/clean away user work, or push directly to `main`. Report `MERGED` only when confirmed by the Git host; otherwise report waiting/blocked.
+- A genuine playbook knowledge change is committed and pushed automatically to `project/<project-id>`. The agent must not create or update Pull Requests, request auto-merge, or merge Pull Requests; PR creation and merging into `main` are owned by the user.
+- A duplicate lesson creates no duplicate file, commit, or push. No knowledge change means no playbook Git write.
+- Never bypass branch protection, reviews, checks or merge queues. Never use `--admin`, force-push, reset/clean away user work, or push directly to `main`. After a verified push, state: "Playbook changes have been pushed to `project/<project-id>`. PR creation and merging are intentionally left to the user."
 - Do not apply unrelated application fixes without first showing their exact locations, rationale, benefits and risks and asking for approval.
 
 ## D. No extra prompt

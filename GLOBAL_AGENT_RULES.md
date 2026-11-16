@@ -5,11 +5,23 @@ These rules are stored in the independent `flutter-playbook` Git repository. The
 ## 1. Automatic behavior; no special user prompt
 
 - The bootstrap rule runs at the start of every user turn in an active Flutter application workspace.
-- The team member only describes the problem or requested work in ordinary language. Never ask them to mention the playbook, search lessons, create a branch, write documentation, push, open a PR or merge.
-- For code-affecting work, identify the project, synchronize its external playbook branch, read `INDEX.md`, and retrieve all matching lessons before implementation.
-- For bug reports asking for a fix, perform the full fix/test/deduplicate/capture/push/PR workflow below automatically.
-- For new feature/refactor/test/build work, apply relevant lessons and select relevant regression tests. Capture a new lesson only when a genuinely reusable defect or prevention pattern is discovered.
-- For informational questions, use relevant knowledge where it helps but do not change code or write a lesson without a reason.
+- For EVERY task involving Flutter/Dart application code—including bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements—automatically activate this workflow:
+  1. Locate and load the registered Playbook worktree for the current project.
+  2. Read `GLOBAL_AGENT_RULES.md`, `INDEX.md`, and all relevant existing lessons BEFORE investigating or modifying application code.
+  3. Follow the complete Playbook investigation, minimal-change implementation, regression testing, lesson deduplication, and Git commit/push workflow.
+  4. Push verified Playbook knowledge changes to `project/<project-id>` when a new or improved lesson is justified.
+  5. Never create or update Pull Requests, request auto-merge, or merge. PR creation and merging belong to the user.
+- **Mandatory activation:**
+  - The user does NOT need to mention the Playbook or paste a special execution prompt.
+  - A normal engineering request is sufficient to activate this workflow.
+  - Do not wait for the user to ask for investigation, testing, documentation, or Playbook updates.
+  - Do not treat the Playbook as optional guidance.
+- **Preflight failure:**
+  - If the Playbook worktree, required instructions, or relevant lessons cannot be located or read, stop before implementation and report the exact problem.
+  - Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded.
+- **Scope control:**
+  - Always implement the smallest correct change that satisfies the user's request. Do not introduce unrelated refactoring or improvements.
+  - For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
 
 ## 2. Project and lesson retrieval
 
@@ -25,11 +37,11 @@ These rules are stored in the independent `flutter-playbook` Git repository. The
 
 Before creating or updating a lesson, compare all relevant lessons using confirmed root cause, reproduction conditions, lifecycle, categories, data flow, symbols, packages, SDK/platform/architecture constraints, bad pattern, preferred solution, exceptions and regression behavior. Do not compare titles/error strings alone.
 
-- Same root cause + same or materially equivalent verified solution: reuse the existing canonical lesson. No duplicate file, commit, push or PR.
+- Same root cause + same or materially equivalent verified solution: reuse the existing canonical lesson. No duplicate file, commit, or push.
 - Same root cause + a safer/better verified solution: update the existing canonical lesson once; preserve valid caveats and compatibility variants.
 - Same symptom + different confirmed root cause: create a separate lesson and cross-link it.
 - Same general issue + unique non-sensitive project context: keep the general lesson once and add only the unique project note.
-- Unknown root cause, unverified fix or failed test: do not publish as approved knowledge or auto-merge. Keep it as a clearly marked candidate on the project branch, or report why no lesson can yet be recorded.
+- Unknown root cause, unverified fix or failed test: do not publish as approved knowledge. Keep it as a clearly marked candidate on the project branch, or report why no lesson can yet be recorded.
 - If two solutions both work, prefer the safer, simpler, better-tested and more compatible option. Keep both only when SDK/platform/architecture conditions justify variants.
 
 ## 4. Fix and test application code
@@ -54,19 +66,48 @@ Knowledge capture is part of completing a resolved bug. Do not ask whether the d
 7. Keep project-specific notes separate and non-sensitive. Never store secrets, credentials, private endpoints, customer PII or proprietary business rules in a repository accessible to other projects.
 8. Update `INDEX.md` only when a new routing topic or meaningful coverage is introduced.
 
-## 6. Automatic playbook Git workflow
+## 6. Automatic playbook Git workflow — manual PR and merge ownership
 
 Only perform Git writes when a lesson is genuinely created or materially improved, or a necessary project registry/profile change is made.
 
 1. Use the persistent external branch `project/<project-id>`; never create this branch in the application repository.
 2. Stage only intended playbook files. Never mix application source/test files into the playbook commit.
-3. Commit and push the project branch automatically after deduplication, verification and privacy checks pass.
-4. Find an existing open PR from this branch to `main`; update/reuse it rather than creating duplicates. Create one only if none exists.
-5. Request host-native auto-merge using merge-commit strategy. For GitHub, `gh pr merge --auto --merge` is the intended operation.
-6. Never bypass required reviews/checks/merge queues. Never use `--admin`, force-push or direct-push to `main`.
-7. Confirm the PR's real state. Say `MERGED` only when the Git host reports it. Otherwise report waiting for checks/review or the exact blocker.
-8. After merge, fetch and synchronize the project branch with `origin/main` safely.
-9. If the lesson is duplicate and unchanged, do not create a commit, push or PR.
+3. Commit and push the project branch (`git push origin project/<project-id>`) automatically after deduplication, verification and privacy checks pass.
+4. **The user owns the entire Pull Request creation and merge process.** The agent must **NOT**:
+   - create a new Pull Request;
+   - update an existing Pull Request;
+   - request auto-merge;
+   - merge any Pull Request;
+   - push directly to `main`;
+   - attempt to bypass branch protection or review requirements.
+5. After the user manually merges a PR into `main`, fetch and synchronize the project branch with `origin/main` safely on subsequent turns.
+6. If the lesson is duplicate and unchanged, do not create an empty commit or push.
+
+## Playbook Git Push & Manual PR Ownership
+
+### Authentication & Execution
+- Use existing Git Credential Manager authentication for all Git operations.
+- Do not require GitHub CLI (`gh`) and do not ask for interactive login during engineering tasks.
+- Never extract credentials from credential stores, expose tokens, or save credentials in repositories.
+- If a Git push fails, report the actual error clearly and do not claim success.
+
+### Git Operations
+Execute standard Git operations in the external project worktree:
+- `git fetch origin`
+- `git status`
+- `git diff`
+- `git add`
+- `git commit`
+- `git push origin project/<project-id>`
+
+### Safety Boundaries
+- Never push directly to `main`.
+- Never force-push (`--force`).
+- Never create, update, auto-merge, or merge Pull Requests automatically.
+- Never bypass reviews or branch protections.
+- Keep application source code and regression tests in the application repository.
+- Keep playbook knowledge in the external playbook repository.
+- Preserve unrelated changes and never create empty commits when there is no new or improved verified knowledge.
 
 ## 7. Concurrency and recovery
 
@@ -87,8 +128,13 @@ After code-affecting work, report concisely:
 - fix and confirmed root cause;
 - lessons searched and reused/created/updated/no-change decision;
 - regression test paths and exact outcomes;
-- external playbook branch and push status;
-- PR URL and actual state: merged / waiting / blocked / not needed;
+- after a successful Playbook push:
+  - project branch name (`project/<project-id>`);
+  - commit hash;
+  - whether the push was verified against the remote;
+  - files changed;
+  - whether a new or updated lesson was included;
+  - state clearly: `"Playbook changes have been pushed to project/<project-id>. PR creation and merging are intentionally left to the user."`
 - optional related fixes awaiting approval.
 
-Never claim a test, push, PR or merge succeeded without its actual result.
+Do not report PR creation, merge readiness, or merge status as completed. If the push fails, report the actual error and do not claim success.
