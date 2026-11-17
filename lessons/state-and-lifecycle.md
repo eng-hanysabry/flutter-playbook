@@ -70,7 +70,7 @@ void _updateLocalDishQty(
 ```
 
 - **Why this solution is preferred:** Decouples instantaneous UI responsiveness (`ValueNotifier`) from serialized server-state convergence (`dish.qty` in BLoC), prevents stale network responses from reverting user input, guarantees termination of convergence loops on delete, and keeps variant badge totals accurate.
-- **Exceptions / caveats:** When an addition originates from an external modal (such as a variant quick-add bottom sheet) rather than the inline counter itself, pass `syncNotifier: true` with `targetQty = originalQty + event.qty` so the card badge reflects the newly accumulated total.
+- **Exceptions / caveats:** When an addition originates from an external modal (such as a variant quick-add bottom sheet) rather than the inline counter itself, pass `syncNotifier: true` with `targetQty = originalQty + event.qty` so the card badge reflects the newly accumulated total. Always propagate `maxQuantity: product.stock` to catalog/grid card counters (`ClothesProductListItem`, `ProductCardWidget`) so the increment `+` button is disabled when quantity reaches stock, and omit manual `showErrorAlert` calls in page BLoC listeners since the core networking service already surfaces API error notifications.
 - **Regression scenario:**
   - **Given** a dish in cart with `qty: 3` and an in-flight `ChangeDishQuantity(targetQty: 6)` request
   - **When** the user taps minus (`quantityNotifier.value = 5` and `ChangeDishQuantity(targetQty: 5)`) before the add response completes, or deletes the item (`targetQty: 0`)
@@ -78,5 +78,6 @@ void _updateLocalDishQty(
 - **Automated test:**
   - `packages/services/resturant_home/test/resturant_home_test.dart` (`flutter test packages/services/resturant_home/test/resturant_home_test.dart`)
   - `packages/services/cart/test/cart_quantity_test.dart` (`flutter test packages/services/cart/test/cart_quantity_test.dart`)
-- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 5 unit and BLoC tests in `resturant_home_test.dart` and all 5 regression tests in `cart_quantity_test.dart` passed
+  - `packages/services/clothes/test/clothes_stock_and_cart_test.dart` (`flutter test packages/services/clothes/test/clothes_stock_and_cart_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 5 unit and BLoC tests in `resturant_home_test.dart`, all 5 regression tests in `cart_quantity_test.dart`, and all 5 unit and widget tests in `clothes_stock_and_cart_test.dart` passed
 - **Related lessons:** None
