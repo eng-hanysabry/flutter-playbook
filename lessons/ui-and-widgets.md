@@ -102,3 +102,79 @@ AppScaffold(
 - **Automated test:** `test/features/provider/home/presentation/pages/home_page_test.dart` and `test/features/provider/portfolio/presentation/pages/portfolio_page_test.dart` (`flutter test test/features/provider/home/presentation/pages/home_page_test.dart test/features/provider/portfolio/presentation/pages/portfolio_page_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — `00:02 +8: All tests passed!`
 - **Related lessons:** `[UI-001]`
+
+---
+
+## [UI-003] Never filter out unavailable product variants at DTO parsing or presentation layers; display with disabled styling and guard selection
+
+- **Scope:** Shared (`panda-m`)
+- **Categories:** UI and widgets, Model serialization, Product variants, Design tokens, Disabled state
+- **Lifecycle:** DTO deserialization, Widget build, User interaction
+- **Technical areas / data flow:** `ProductVariantModel.fromJson`, `VariantsWidget`, `_VariantOptionRow`, `VariantController`
+- **Applies when:** Flutter 3.x / Dart 3.x with product variant models having option availability flags (`is_available`)
+- **Symptom:** Unavailable options (e.g. sizes or meal volumes out of stock) vanish completely from the UI instead of rendering in a disabled, unselectable state with disabled typography tokens.
+- **Reproduction:** Parse an API response containing variant options with `"is_available": false` when `ProductVariantModel.fromJson` or UI widget build methods filter options via `.where((o) => o.isAvailable)`.
+- **Root cause:** Pre-filtering options at the DTO deserialization level (`.where((o) => o.isAvailable)` in `fromJson`) or at UI list rendering stripped unavailable items before the presentation layer could inspect or render them in an inactive state.
+- **Rule:** Retain all options during model deserialization and pass them to UI widgets. In the UI, render unavailable options with disabled text styling (`context.appColors.gray.c40`), set interaction handlers (`InkWell.onTap`, `Radio.onChanged`) to `null`, and constrain auto-default selection to available options only.
+- **Bad pattern:**
+
+```dart
+// DTO parsing stripping unavailable items prematurely
+factory ProductVariantModel.fromJson(Map<String, dynamic> json) {
+  return ProductVariantModel(
+    name: json['name'] ?? '',
+    isColor: _toBool(json['is_color']),
+    options: (json['options'] as List?)
+        ?.map((e) => VariantOptionModel.fromJson(e))
+        .where((o) => o.isAvailable) // BUG: strips unavailable options from model
+        .toList() ?? [],
+  );
+}
+
+// UI hiding unavailable options
+final availableOptions = group.options.where((o) => o.isAvailable).toList();
+```
+
+- **Good pattern:**
+
+```dart
+// DTO parses all options, preserving isAvailable
+options: (json['options'] as List?)
+    ?.map((e) => VariantOptionModel.fromJson(e))
+    .toList() ?? [],
+
+// UI renders all options, styling and disabling unavailable ones
+final isAvailable = option.isAvailable;
+final disabledColor = context.appColors.gray.c40;
+
+InkWell(
+  onTap: isAvailable ? onTap : null,
+  child: Row(
+    children: [
+      Radio<String>(
+        value: option.id.toString(),
+        groupValue: groupValue,
+        onChanged: isAvailable ? (_) => onTap() : null,
+      ),
+      Expanded(
+        child: Text(
+          option.name,
+          style: baseStyle?.copyWith(
+            color: isAvailable ? null : disabledColor,
+          ),
+        ),
+      ),
+    ],
+  ),
+);
+```
+
+- **Why this solution is preferred:** Users can see all offered choices while immediately recognizing out-of-stock options through disabled styling, and state controllers prevent invalid selection.
+- **Exceptions / caveats:** If a product category or business requirement strictly dictates hiding deprecated or deleted variants completely, ensure the backend suppresses them rather than client-side availability flags confusing stock availability with catalog visibility.
+- **Regression scenario:**
+  - **Given** a dish or product with 1 available option ("كبير") and 2 unavailable options ("وسط", "صغير")
+  - **When** the variant section renders
+  - **Then** all 3 options must be present in the UI, unavailable options must have `onTap: null` and `onChanged: null` with disabled color styling, and default selection must only pick "كبير"
+- **Automated test:** `packages/services/resturant_home/test/restaurant_dish_variant_availability_test.dart` (`flutter test packages/services/resturant_home/test/restaurant_dish_variant_availability_test.dart`)
+- **Verification:** Verified on Flutter 3.32+ / Dart 3.8+ — `00:01 +4: All tests passed!`
+- **Related lessons:** None
