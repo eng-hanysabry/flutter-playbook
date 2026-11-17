@@ -70,14 +70,15 @@ void _updateLocalDishQty(
 ```
 
 - **Why this solution is preferred:** Decouples instantaneous UI responsiveness (`ValueNotifier`) from serialized server-state convergence (`dish.qty` in BLoC), prevents stale network responses from reverting user input, guarantees termination of convergence loops on delete, and keeps variant badge totals accurate.
-- **Exceptions / caveats:** When an addition originates from an external modal (such as a variant quick-add bottom sheet) rather than the inline counter itself, pass `syncNotifier: true` with `targetQty = originalQty + event.qty` so the card badge reflects the newly accumulated total. Always propagate `maxQuantity: product.stock` to catalog/grid card counters (`ClothesProductListItem`, `ProductCardWidget`) so the increment `+` button is disabled when quantity reaches stock, and omit manual `showErrorAlert` calls in page BLoC listeners since the core networking service already surfaces API error notifications.
+- **Exceptions / caveats:** When an addition originates from an external modal (such as a variant quick-add bottom sheet) rather than the inline counter itself, pass `syncNotifier: true` with `targetQty = originalQty + event.qty` so the card badge reflects the newly accumulated total. In cart and catalog grids (`OrdersCartItemTile`, `ClothesProductListItem`, `ProductCardWidget`), propagate `maxValue: item.maxStock ?? product.stock` to counter widgets to disable `+` when reaching maximum stock. For recommended or catalog products requiring variants (`hasVariants == true`), intercept inline `addToCart` to navigate to the product details page instead of dispatching direct cart additions without `combination_id` (preventing 422 Unprocessable Entity errors). Omit manual `showErrorAlert` calls in page BLoC listeners when the core networking interceptor already surfaces API error alerts.
 - **Regression scenario:**
-  - **Given** a dish in cart with `qty: 3` and an in-flight `ChangeDishQuantity(targetQty: 6)` request
-  - **When** the user taps minus (`quantityNotifier.value = 5` and `ChangeDishQuantity(targetQty: 5)`) before the add response completes, or deletes the item (`targetQty: 0`)
-  - **Then** `quantityNotifier.value` remains `5`, the BLoC dispatches a follow-up decrement of `1` once the add resolves, and deleting to `0` resets `dish.qty` to `0` and clears `cartItemId` in a single `DELETE` call
+  - **Given** an in-cart item or recommended product with limited stock, and a recommended multi-variant product
+  - **When** the item quantity equals stock, or a user taps add on the recommended multi-variant product
+  - **Then** the increment `+` button is disabled when quantity reaches stock, and tapping add on the variant product navigates to the details page rather than failing with a 422 HTTP error
 - **Automated test:**
   - `packages/services/resturant_home/test/resturant_home_test.dart` (`flutter test packages/services/resturant_home/test/resturant_home_test.dart`)
   - `packages/services/cart/test/cart_quantity_test.dart` (`flutter test packages/services/cart/test/cart_quantity_test.dart`)
   - `packages/services/clothes/test/clothes_stock_and_cart_test.dart` (`flutter test packages/services/clothes/test/clothes_stock_and_cart_test.dart`)
-- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 5 unit and BLoC tests in `resturant_home_test.dart`, all 5 regression tests in `cart_quantity_test.dart`, and all 5 unit and widget tests in `clothes_stock_and_cart_test.dart` passed
+  - `packages/services/cart/test/cart_stock_and_variant_test.dart` (`flutter test packages/services/cart/test/cart_stock_and_variant_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all unit and widget tests in `resturant_home_test.dart`, `cart_quantity_test.dart`, `clothes_stock_and_cart_test.dart`, and `cart_stock_and_variant_test.dart` passed
 - **Related lessons:** None
