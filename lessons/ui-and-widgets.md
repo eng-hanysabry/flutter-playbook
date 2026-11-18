@@ -464,3 +464,103 @@ Container(
 - **Automated test:** `test/features/shared/static_pages/html_content_parser_test.dart` (`flutter test test/features/shared/static_pages/html_content_parser_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 8 parser/widget tests and all 26 static page tests passed cleanly.
 - **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`, `[NET-001]`
+
+---
+
+## [UI-009] Canonical day chip mapping for structured schedule arrays and technical document title localization
+
+- **Category:** profile/settings, forms, API/data, localization
+- **Lifecycle:** initial-load, update-save
+- **Applicability:** Multi-day schedule selection chips (`Wrap`, `FilterChip`), form initialization from REST backend schedules, document attachment metadata translation.
+- **Symptom:**
+  1. Opening the edit profile screen displays 0 selected days (or dummy default fallback chips) even though the API returned a full 7-day `working_hours` array with active operating days (`"from": "09:00", "to": "17:00"`) and inactive days (`"from": null, "to": null`).
+  2. Document attachments whose type or title is a technical English string (`"health_certificate"`) display raw text in UI cards, tiles, and preview sheets instead of the localized Arabic string ("الشهادة الصحية").
+- **Root cause:**
+  1. The backend returns 7 day objects where inactive days have `"from": null`. The model parser was not filtering out null days, and added raw backend strings (`"Sunday"`, `"الأحد"`) directly to `workingDays`. In the UI, day chips were keyed by canonical short strings (`'sat'`, `'sun'`, `'mon'`, `'tue'`, `'wed'`, `'thu'`, `'fri'`). Because `'Sunday'` != `'sun'`, chip selection checks failed. Additionally, the form controller fell back to dummy default initializers (`['sun', 'mon']`) violating Rule 12.
+  2. Document tile and slot helpers prioritized non-empty raw `doc.title` over type-based localization. When the backend returned `title: "health_certificate"`, the technical identifier was displayed as-is rather than resolving to `'provider_profile.doc_health_certificate'.tr()`.
+- **Bad pattern:**
+
+```dart
+// BAD: Adding raw strings directly to workingDays without checking for null "from"
+if (hoursRaw is List) {
+  for (final item in hoursRaw) {
+    final dayLabel = (item['label'] ?? item['day'] ?? '').toString();
+    days.add(dayLabel); // "الأحد" or "Sunday"
+  }
+}
+
+// BAD: Initializing UI chips directly with raw strings and fake default fallback
+selectedDaysNotifier = ValueNotifier<List<String>>(
+  d?.workingDays.isNotEmpty == true ? List.from(d!.workingDays) : ['sun', 'mon'],
+);
+
+// BAD: Bypassing localization when title is non-empty even if technical
+final title = doc.title.isNotEmpty ? doc.title : resolveDefaultTitle(type);
+```
+
+- **Good pattern:**
+
+```dart
+// 1. In DTO/Model: Filter active days from working_hours where from != null
+final hoursRaw = specProfile['working_hours'] ?? json['working_hours'];
+if (hoursRaw is List) {
+  final List<String> activeHoursDays = [];
+  for (final item in hoursRaw) {
+    if (item is Map<String, dynamic>) {
+      final f = item['from']?.toString();
+      final t = item['to']?.toString();
+      if (f != null && f.isNotEmpty && f != 'null') {
+        final dayLabel = (item['label'] ?? item['day'] ?? '').toString();
+        if (dayLabel.isNotEmpty) activeHoursDays.add(dayLabel);
+        if (fromTime.isEmpty) fromTime = f;
+        if (toTime.isEmpty && t != null && t != 'null') toTime = t;
+      }
+    }
+  }
+  if (activeHoursDays.isNotEmpty) {
+    days.clear();
+    days.addAll(activeHoursDays);
+  }
+}
+
+// 2. In Form Controllers: Normalize raw strings to canonical day chip keys ('sat'..'fri')
+final initialDays = <String>[];
+if (d?.workingDays != null && d!.workingDays.isNotEmpty) {
+  for (final raw in d.workingDays) {
+    final order = ProviderScheduleFormatter.getDayOrder(raw);
+    if (order != null && order >= 0 && order < ProviderScheduleFormatter.allDays.length) {
+      final key = ProviderScheduleFormatter.allDays[order].key;
+      if (!initialDays.contains(key)) initialDays.add(key);
+    }
+  }
+}
+selectedDaysNotifier = ValueNotifier<List<String>>(initialDays);
+
+// 3. In Document Helpers: Intercept technical identifiers and resolve localization
+static String resolveDocumentTitle(ProviderDocumentEntity doc) {
+  final type = resolveDocumentType(doc);
+  final raw = doc.title.trim().toLowerCase();
+  const technical = {
+    '',
+    'health_certificate',
+    'health certificate',
+    'health-certificate',
+    'certificate',
+    'commercial_front',
+    'commercial_back',
+    'activity_license',
+  };
+  final isTech = technical.contains(raw) || raw == type.toLowerCase();
+  return isTech ? resolveDefaultTitle(type) : doc.title;
+}
+```
+
+- **Why this solution is preferred:** Normalizes heterogeneous backend day representations (Arabic text, English names, canonical keys) into canonical UI keys for reliable selection state, completely avoids dummy/synthetic fallback defaults (Rule 12), and ensures all technical document IDs consistently translate into user-facing localized labels.
+- **Exceptions / caveats:** When submitting profile edits back to the backend, map canonical UI keys back to the backend's expected day format (e.g. `'sun'` -> `'Sunday'`).
+- **Regression scenario:**
+  - **Given** a provider profile with `working_hours` array (Sunday, Monday, Saturday active; Tuesday-Friday null) and a `health_certificate` document
+  - **When** Edit Profile loads
+  - **Then** Sunday, Monday, and Saturday chips are selected while Tuesday-Friday remain unselected, time inputs show `"09:00 AM"` / `"05:00 PM"`, and the document displays `"الشهادة الصحية"`
+- **Automated test:** `test/features/provider/profile_live_contract_test.dart`
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 with `flutter test test/features/provider/profile_live_contract_test.dart` and `tool/verify.ps1 -Fast`.
+- **Related lessons:** `[UI-003]`, `[NET-001]`, `[UI-008]`
