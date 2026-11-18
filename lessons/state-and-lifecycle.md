@@ -137,3 +137,85 @@ class ProfileModule extends Module {
   - Linter rule `no-child-module-root-di` in `tool/check_rules.dart`
 - **Verification:** Ran `flutter test test/features/client/profile/presentation/pages/equipment_owner_register_di_test.dart` (2 tests passed), `dart run tool/check_rules.dart` (OK, 0 violations), and `tool/verify.ps1 -Fast` (`VERIFY OK`).
 - **Related lessons:** None
+
+---
+
+## [STATE-003] Suppressing multiple error alerts during input editing after form submission failure
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** state management, error handling, ui/ux, form validation, bloc
+- **Lifecycle:** form submission, input editing, state emission
+- **Technical areas / data flow:** BLoC / Cubit state transition, `BlocConsumer.listenWhen`, `ActionAlert.show` overlay deduplication
+- **Applies when:** Form screens or edit views (e.g. profile edit, add equipment, registration) submit an action, encounter a failure, and the user subsequently edits input fields (`onChanged`).
+- **Symptom:** After an API error occurs, typing any character or changing any dropdown repeatedly triggers the error toast/alert (`showErrorAlert`) on every keystroke or change, spamming the user interface.
+- **Reproduction:** Submit a form with invalid data or broken connection to trigger a failure state. Then type characters in any text field or select another dropdown item. An error toast appears on each keystroke.
+- **Root cause:** 
+  1. Input change events in BLoC (e.g. `UpdateNameEvent`, `SelectCategoryEvent`) emit `state.copyWith(...)` without resetting `status` away from `failure` or without setting `errorMessage: null`. Thus every new keystroke emits a new state that still has `status == failure` and `errorMessage != null`.
+  2. The UI `BlocConsumer` / `BlocListener` lacks a `listenWhen` condition, causing the listener to re-execute on every state emission.
+  3. `ActionAlert.show` unconditionally cleared the previous overlay and mounted a new one, causing UI flashing without deduplication.
+- **Rule:** 
+  1. In `ActionAlert.show`, enforce automatic deduplication so identical error messages cannot re-mount within 2 seconds.
+  2. In all BLoCs handling form editing, every input change handler must transition `status` back to `loaded` / `ready` and clear `errorMessage`.
+  3. In all UI listeners (`BlocConsumer` / `BlocListener`), always provide `listenWhen: (prev, curr) => prev.status != curr.status || (curr.errorMessage != null && prev.errorMessage != curr.errorMessage)`.
+- **Bad pattern:**
+
+```dart
+// BLoC:
+void _onUpdateName(UpdateNameEvent event, Emitter<FormState> emit) {
+  emit(state.copyWith(name: event.name)); // Retains status == failure and previous errorMessage!
+}
+
+// UI:
+BlocConsumer<FormBloc, FormState>(
+  listener: (context, state) {
+    if (state.status == FormStatus.failure) {
+      context.showErrorAlert(state.errorMessage!); // Fires on EVERY keystroke!
+    }
+  },
+  builder: (context, state) => ...
+)
+```
+
+- **Good pattern:**
+
+```dart
+// BLoC:
+void _onUpdateName(UpdateNameEvent event, Emitter<FormState> emit) {
+  emit(state.copyWith(
+    status: state.status == FormStatus.failure ? FormStatus.loaded : state.status,
+    errorMessage: () => null,
+    name: event.name,
+  ));
+}
+
+// UI:
+BlocConsumer<FormBloc, FormState>(
+  listenWhen: (prev, curr) =>
+      prev.status != curr.status ||
+      (curr.errorMessage != null && prev.errorMessage != curr.errorMessage),
+  listener: (context, state) {
+    if (state.status == FormStatus.failure && state.errorMessage != null) {
+      context.showErrorAlert(state.errorMessage!);
+    }
+  },
+  builder: (context, state) => ...
+)
+
+// Design system global guard (ActionAlert):
+if (type == ActionAlertType.error) {
+  final now = DateTime.now();
+  if (_lastErrorMessage == message &&
+      _lastErrorTime != null &&
+      now.difference(_lastErrorTime!) < const Duration(seconds: 2)) {
+    return;
+  }
+  _lastErrorMessage = message;
+  _lastErrorTime = now;
+}
+```
+
+- **Why this solution is preferred:** Provides defense-in-depth: the global design-system layer suppresses accidental duplicate toasts, while the BLoC and UI layers maintain clean state contracts without stale failure states.
+- **Automated test:**
+  - `test/features/shared/notifications/push_preference_cubit_device_api_test.dart`
+- **Verification:** Verified with `flutter test` and `powershell -File .\tool\verify.ps1 -Fast` (`VERIFY OK`).
+- **Related lessons:** None
