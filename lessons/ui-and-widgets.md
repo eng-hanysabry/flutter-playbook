@@ -105,6 +105,314 @@ AppScaffold(
 
 ---
 
+## [UI-003] Never combine tight explicit vertical padding with fixed height on buttons displaying localized text with descenders
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Responsive UI, Localization, Typography
+- **Lifecycle:** User interaction, Screen build, Localization
+- **Technical areas / data flow:** Button widgets (`Container`, `AppButton`, `CustomText`), font metrics (`Noto Sans Arabic`), vertical alignment and clipping
+- **Applies when:** Flutter 3.x / Dart 3.x with fixed-height button containers (`height: 46.h` / `48.h`) displaying non-Latin or Arabic typography with glyphs extending below baseline (`تسجيل الخروج`)
+- **Symptom:** The bottom portion of Arabic letters with bottom descenders (such as `ج` in `الخروج` or `ر`) is visibly clipped off at the bottom border of the button.
+- **Reproduction:** Set a fixed button container height (`height: 46.h`), add explicit vertical padding (`padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 20.w)`), and render Arabic text with rigid line height (`height: 20 / 14`). The available inner height becomes `46 - 24 = 22.h`, clipping bottom glyph descenders.
+- **Root cause:** Combining a rigid container `height` with explicit `vertical` padding severely constrains the inner vertical layout space (`inner_height = height - (2 * vertical_padding)`). Because Arabic font metrics in `Noto Sans Arabic` allocate additional descent space for letters like `ج`, `ح`, `خ`, `ع`, `غ`, `ر`, `ز`, the text overflows the inner bounds and clips at the container edge.
+- **Rule:** On fixed-height action buttons, omit explicit vertical padding (or use `EdgeInsets.symmetric(horizontal: ...)`) and center the text with `alignment: Alignment.center` within an adequate height (`48.h`), allowing the text widget to use the full container vertical span without descender clipping.
+- **Bad pattern:**
+
+```dart
+Container(
+  width: double.infinity,
+  height: 46.h,
+  // BUG: 12.h * 2 leaves only 22.h for 14.sp Arabic text with descenders, clipping the bottom.
+  padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 20.w),
+  alignment: Alignment.center,
+  child: CustomText(
+    'profile.logout'.tr(), // "تسجيل الخروج"
+    fontSize: 14.sp,
+    height: 20 / 14,
+  ),
+)
+```
+
+- **Good pattern:**
+
+```dart
+Container(
+  width: double.infinity,
+  height: 48.h,
+  // Omit vertical padding; let alignment: Alignment.center use the full 48.h span.
+  padding: EdgeInsets.symmetric(horizontal: 20.w),
+  alignment: Alignment.center,
+  child: CustomText(
+    'profile.logout'.tr(),
+    fontSize: 14.sp,
+    fontWeight: FontWeight.w700,
+  ),
+)
+```
+
+- **Why this solution is preferred:** Centers text cleanly without clipping descenders or diacritics across varying localized strings and ScreenUtil scaling factors.
+- **Exceptions / caveats:** When a button's height is determined dynamically by its content (no fixed `height:`), symmetric vertical padding is appropriate and necessary.
+- **Regression scenario:**
+  - **Given** Client Profile and Provider Profile screens with dangerous action logout buttons
+  - **When** the page renders in Arabic
+  - **Then** the text "تسجيل الخروج" must render with full descenders visible and zero bottom border clipping
+- **Automated test:** `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/presentation/pages/profile_details_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all profile tests passed cleanly.
+- **Related lessons:** `[UI-002]`
+
+---
+
+## [UI-004] Render binary image API responses in WebView using in-memory Base64 HTML strings instead of direct loadRequest URLs
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Web views, Media, REST/Dio
+- **Lifecycle:** User interaction, Initial-load, Async fetch
+- **Technical areas / data flow:** `webview_flutter` (`WebViewController`), binary response streams, Base64 data URLs, HTML rendering
+- **Applies when:** Flutter 3.x / Dart 3.x using `webview_flutter` to preview images or files retrieved from authenticated REST endpoints returning binary byte streams (`Content-Type: image/jpeg`, `application/octet-stream`)
+- **Symptom:** Opening a document preview dialog displays an indefinite loading spinner while the console logs raw response bytes (`147, 92, 22, 88...`), and the WebView never displays the image or invokes `onPageFinished`.
+- **Reproduction:** Call `WebViewController.loadRequest(uri, headers: ...)` directly with an API endpoint that returns a binary stream (or attachment headers). Android WebView treats the response as an unhandled download rather than a renderable HTML document, hanging navigation indefinitely.
+- **Root cause:** Android's internal WebView engine does not automatically render arbitrary raw binary byte streams received from HTTP GET requests without a standard HTML wrapper or native mime handling. Because navigation never completes as a web page, `onPageFinished` is never triggered and the UI loading indicator spins forever.
+- **Rule:** Retrieve the binary bytes via clean architecture (BLoC / use case with authenticated client), convert the byte buffer to a Base64 data URL embedded in an HTML `<img>` template with responsive CSS and pinch-to-zoom viewport meta tags, and render it using `WebViewController.loadHtmlString(...)`.
+- **Bad pattern:**
+
+```dart
+// BUG: Android WebView cannot render raw binary octet streams directly via loadRequest; hangs forever
+_controller.loadRequest(
+  Uri.parse('https://api.example.com/documents/69'),
+  headers: {'Authorization': 'Bearer $token'},
+);
+```
+
+- **Good pattern:**
+
+```dart
+// 1. Fetch bytes via clean architecture (BLoC / Use Case)
+final bytes = await file.readAsBytes();
+final mimeType = isPng ? 'image/png' : 'image/jpeg';
+final base64String = base64Encode(bytes);
+
+// 2. Embed into responsive HTML with pinch-to-zoom and render via loadHtmlString
+final html = '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes"><style>html,body{margin:0;padding:12px;display:flex;justify-content:center;align-items:center;min-height:100vh;background-color:#f7f9fa;box-sizing:border-box;}img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}</style></head><body><img src="data:$mimeType;base64,$base64String" alt="Preview"/></body></html>';
+await _controller.loadHtmlString(html);
+_isLoadingNotifier.value = false;
+```
+
+- **Why this solution is preferred:** Guarantees instantaneous, 100% reliable rendering on both Android and iOS WebView, provides pinch-to-zoom accessibility, prevents download dialogs or external app opening when the user merely wants a quick preview, and eliminates infinite loading states.
+- **Exceptions / caveats:** For multi-page PDF documents on Android (where WebView does not natively render PDFs without PDF.js or Google Docs viewer), pass the file to a dedicated PDF viewer widget or fallback to `loadFile` / platform view.
+- **Regression scenario:**
+  - **Given** a provider document returned from an API endpoint as raw binary image bytes
+  - **When** the user taps the "معاينة" (Preview) action on the document tile
+  - **Then** the image must render immediately inside the preview dialog WebView with zero external app opening, no download notification, and the loading indicator dismissed promptly
+- **Automated test:** `test/features/provider/profile/presentation/bloc/profile_details_bloc_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 19 profile tests passed cleanly.
+- **Related lessons:** `[UI-003]`
+
+---
+
+## [UI-005] Sort and format localized working day schedules with unclipped flex banner rows
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Localization, Responsive UI, Typography
+- **Lifecycle:** Initial-load, Screen build, Localization
+- **Technical areas / data flow:** `ProviderWorkingScheduleCard`, day normalization, canonical week ordering (Saturday to Friday), consecutive range collapsing, flex rows
+- **Applies when:** Flutter 3.x / Dart 3.x displaying localized working schedule banners containing both variable-length day lists and formatted time period strings
+- **Symptom:** In summary schedule banners, hours text is truncated with ellipsis (`08:00 صباحًا — 05...`), and day lists appear unsorted or separated by plain dashes instead of canonical ranges or locale-appropriate commas (`، ` in Arabic, `, ` in English).
+- **Reproduction:** Wrap both the days label and the hours label in `Flexible(child: CustomText(..., overflow: TextOverflow.ellipsis))` inside a `Row`. When the days string grows (multiple days joined with commas), it shrinks the hours label until its descenders or trailing period are clipped.
+- **Root cause:** Simultaneous use of `Flexible` with `TextOverflow.ellipsis` on both sides of a horizontal `Row` causes competing flex space allocation. Without sorting days by standard calendar order (Saturday = 0 through Friday = 6), arbitrary incoming API array orders produce chaotic day displays.
+- **Rule:** Order incoming days strictly by canonical week order (Saturday to Friday). If the sorted days form an unbroken consecutive sequence, collapse them into a range (`startDay - endDay`); otherwise join them with locale-specific commas (`، ` in Arabic, `, ` in English). In the summary row, allocate remaining width to days via `Expanded` while allowing the formatted time period to size to its natural width without clipping.
+- **Bad pattern:**
+
+```dart
+// BUG: Arbitrary day order, plain dashes for non-continuous days, and hours truncated with ellipsis
+final daysStr = rawDays.join(' — ');
+Row(
+  children: [
+    Flexible(child: CustomText(daysStr, overflow: TextOverflow.ellipsis)),
+    Flexible(child: CustomText(hoursStr, overflow: TextOverflow.ellipsis)),
+  ],
+)
+```
+
+- **Good pattern:**
+
+```dart
+// 1. Sort by canonical week order (Saturday to Friday)
+final sortedOrders = ProviderScheduleFormatter.getSortedDayOrders(workingDays);
+
+// 2. Collapse continuous sequences into range (Sat - Mon) or join with localized comma
+final daysStr = ProviderScheduleFormatter.formatGroupedDays(sortedOrders, languageCode: locale.languageCode);
+
+// 3. Format hours without clipping
+Row(
+  children: [
+    Expanded(child: CustomText(daysStr, fontSize: 13.sp, fontWeight: FontWeight.w700)),
+    SizedBox(width: 8.w),
+    CustomText(hoursStr, fontSize: 13.sp, fontWeight: FontWeight.w700, textAlign: TextAlign.end),
+  ],
+)
+```
+
+- **Why this solution is preferred:** Guarantees predictable, professional RTL/LTR day order, produces readable day ranges (e.g. "السبت - الإثنين") or comma lists ("السبت، الإثنين، الأربعاء"), and ensures time periods are never truncated.
+- **Exceptions / caveats:** In individual child rows where width is constrained, use `Expanded` on the day label and natural sizing on the trailing clock icon/time row.
+- **Regression scenario:**
+  - **Given** working schedule data with continuous and non-continuous days
+  - **When** the profile schedule card renders in Arabic or English
+  - **Then** consecutive days must collapse into a dash range ("السبت - الإثنين"), non-consecutive days must display localized commas ("السبت، الإثنين، الأربعاء"), days must be ordered Saturday to Friday, and hours must display full unclipped text
+- **Automated test:** `test/features/provider/profile/presentation/widgets/provider_schedule_formatter_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 31 tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-004]`
+
+---
+
+## [UI-006] Preserve persistent document upload slots on deletion during edit flows with register-matching validation
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Forms, Profile/Settings, Validation UX, Shared components
+- **Lifecycle:** Update-save, Delete, Submit, Screen build
+- **Technical areas / data flow:** Document management, slot-based UI state (`ProfileEditDocumentSlot`), multipart uploads, client-side validation toasts
+- **Applies when:** Flutter 3.x / Dart 3.x applications with edit flows for professional profiles or documents where mandatory verification attachments can be replaced
+- **Symptom:** In profile edit forms, deleting an existing attachment removes the entire widget tile from the tree, shrinking or hiding the card and leaving the user with no UI placeholder to upload a replacement document, while allowing form submission without mandatory documents.
+- **Reproduction:** Call `.removeWhere((doc) => doc.id == id)` on the documents list when the user taps delete, causing the document card to vanish, and tap save without enforcing that every required document category is satisfied.
+- **Root cause:** Treating editable document attachments as an ephemeral list of existing items rather than a fixed set of required category slots (`certificate`, `health_certificate`, `commercial_front`, `commercial_back`, `activity_license`). When an existing document was deleted, the slot was erased from the UI rather than transitioning to an empty upload placeholder.
+- **Rule:** Model documents in edit flows as category-bound slots (`ProfileEditDocumentSlot`) tracking original document, deletion flag, and replacement file. When an attachment is deleted, retain its position in the UI and render the empty upload placeholder card (with dashed border, category title, and file picker) matching the registration step. Block form save and alert the user with localized error toasts if any required document slot is missing an attachment.
+- **Bad pattern:**
+```dart
+// BUG: Removing the document erases the slot from the UI and allows saving without required doc
+void _onRemoveDocument(String docId) {
+  _documentsNotifier.value = List.from(_documentsNotifier.value)
+    ..removeWhere((doc) => doc.id == docId);
+}
+```
+- **Good pattern:**
+```dart
+// Slot remains in place as replacement upload placeholder
+void _onRemoveDocument(String slotId) {
+  _slotsNotifier.value = _slotsNotifier.value
+      .map((s) => s.id == slotId ? s.copyWith(isDeleted: true, clearNewFile: true) : s)
+      .toList();
+}
+
+// Validation enforces all required slots are satisfied before submit
+final missingSlot = ProfileEditDocumentHelper.findMissingDocumentSlot(_slotsNotifier.value);
+if (missingSlot != null) {
+  context.showErrorAlert(ProfileEditDocumentHelper.getMissingDocumentMessage(missingSlot));
+  return;
+}
+```
+- **Why this solution is preferred:** Maintains a clear, persistent visual affordance for the user to upload replacement documents without navigating away, guarantees that required verification documents are never accidentally bypassed on profile update, and mirrors the exact UX and error messages of the registration wizard.
+- **Exceptions / caveats:** Optional document types (if configured by backend metadata) should allow empty states; required document types must strictly block form submission when empty.
+- **Regression scenario:**
+  - **Given** a provider profile edit screen with an existing uploaded certificate
+  - **When** the user taps the delete icon on the certificate tile
+  - **Then** the card must not disappear; it must transition to the empty upload card placeholder, and tapping save must show an error alert ("يرجى رفع الشهادة المهنية") until a replacement file is picked
+- **Automated test:** `test/features/provider/profile/presentation/pages/profile_edit_page_test.dart` (`flutter test test/features/provider/profile/presentation/pages/profile_edit_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 42 tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-005]`
+
+
+---
+
+## [UI-007] Display normalized 1-5 rating distribution rows on zero-rating analytics states instead of hiding cards, with unified subtle surface shadows
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Dashboards, Responsive UI, RTL & Localization, Shared components
+- **Lifecycle:** Initial-load, Screen build, Empty states
+- **Technical areas / data flow:** Ratings breakdown card, rating summary header, empty state management, BoxShadow elevation consistency, RTL row directionality
+- **Applies when:** Flutter 3.x / Dart 3.x applications presenting user/provider performance metrics, rating distributions, or customer reviews lists
+- **Symptom:** When an entity has zero ratings, the entire ratings breakdown component or the full ratings page is hidden behind an empty-state illustration (`AppEmptyState`), hiding the expected dashboard UI structure. In addition, cards across related screens (e.g. statistics vs. ratings) display inconsistent elevation or missing shadows, and RTL progress bars invert the position of the star label and linear indicators.
+- **Reproduction:** Return null or an empty distribution array `[]` from the repository, causing `ProviderRatingsContentWidget` to return `AppEmptyState`, or mapping over an empty `distribution` list producing 0 indicator rows, leaving the user with an empty screen rather than the structured 5-star dashboard breakdown.
+- **Root cause:** Relying directly on raw API distribution arrays (`distribution.map(...)`) without normalization, and triggering full-screen empty state guards when metric counts are zero instead of rendering the standard zero-state metrics card.
+- **Rule:** Always normalize star distributions to exactly 5 rows (stars 5 down to 1) using `List.generate(5, ...)` with a fallback percentage of `0.0` when zero ratings exist. Keep the card and header visible on the screen so the user sees the expected UI structure. Apply the unified brand elevation `BoxShadow(color: context.appColors.primary.c100.withValues(alpha: 0.04), blurRadius: 10.r, offset: Offset(0, 4.h))` consistently across all metric and review cards. In RTL Arabic layouts, place leading elements (overall score, star number & icon) at `children[0]` (physical RIGHT) and trailing elements (progress bars, rating pills) at `children[last]` (physical LEFT).
+- **Bad pattern:**
+```dart
+// BUG: Hides entire screen behind empty state when ratings are null or 0
+if (ratings == null) {
+  return AppEmptyState(...);
+}
+
+// BUG: Only renders rows returned by API, disappearing completely on empty ratings
+Column(
+  children: distribution.map((item) => ...).toList(),
+)
+```
+- **Good pattern:**
+```dart
+// Normalize to 5 rows (5 down to 1) with 0.0 fallback
+final rows = List.generate(5, (index) {
+  final star = 5 - index;
+  final found = distribution.where((e) => e.stars == star);
+  return found.isNotEmpty
+      ? found.first
+      : RatingDistributionEntity(stars: star, percentage: 0.0);
+});
+
+// Render ratings card with unified brand shadow and persistent UI structure
+Container(
+  decoration: BoxDecoration(
+    color: context.appColors.white,
+    borderRadius: BorderRadius.circular(16.r),
+    border: Border.all(
+      color: context.appColors.primary.c20.withValues(alpha: 0.6),
+      width: 1.w,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: context.appColors.primary.c100.withValues(alpha: 0.04),
+        blurRadius: 10.r,
+        offset: Offset(0, 4.h),
+      ),
+    ],
+  ),
+  child: ...
+)
+```
+- **Why this solution is preferred:** Preserves predictable dashboard and reviews screen layouts regardless of new-user vs. established-user status, eliminates layout jarring when receiving a first review, aligns RTL reading direction correctly, and creates visual harmony through unified card shadows.
+- **Exceptions / caveats:** For child list collections (such as actual user review comments), show a localized empty notice (`provider_statistics.no_reviews_yet`) beneath the persistent summary card rather than hiding the entire page.
+- **Regression scenario:**
+  - **Given** a service provider with zero reviews and zero ratings
+  - **When** the provider navigates to the ratings page (`/provider_statistics/ratings`)
+  - **Then** the page must NOT hide behind `AppEmptyState`; it must display the summary card with 0.0 average and 5 visible star distribution rows (5 to 1) at 0% with consistent card shadows, followed by the empty reviews notice
+- **Automated test:** `test/features/provider/statistics/presentation/pages/ratings_page_test.dart` (`flutter test test/features/provider/statistics/presentation/pages/ratings_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 16 statistics and ratings tests passed cleanly with 0 analyzer issues.
+- **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`
+
+
+---
+
+## [UI-008] Parsing CMS multilingual pseudo-tags and enforcing design token collapsed tile heights on ExpansionTile
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Shared components, RTL & Localization, Responsive UI, API/data
+- **Lifecycle:** Initial-load, Screen build, Localization
+- **Technical areas / data flow:** CMS content rendering, `flutter_widget_from_html_core` (`HtmlWidget`), `ExpansionTile`, `minTileHeight`, `BoxConstraints`, regex multilingual extraction
+- **Applies when:** Flutter 3.x / Dart 3.x applications consuming CMS or admin-panel rich text APIs containing embedded language tags (e.g. `<p>&lt;ar&gt;</p>...<p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`) and rendering accordion FAQ lists matching Figma design tokens.
+- **Symptom:**
+  1. Static pages (e.g., Contact Us, About, Terms) display a massive dump of unparsed foreign language blocks and raw metadata tags (`<ar>`, `</ar>`, `<cs-CZ>`, `&lt;ar&gt;`) as plain text on the screen instead of clean native HTML in the user's selected language.
+  2. Accordion FAQ tiles expand or shrink to arbitrary heights dictated by default `ListTile` vertical padding instead of strictly matching the design token specification (e.g., `62.h`).
+- **Reproduction:**
+  1. Query a static page endpoint (e.g. `GET api/v1/client/pages/contact`) returning multilingual body HTML with `<p>&lt;ar&gt;</p>...<p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`.
+  2. Pass the raw string directly to `HtmlWidget(html)`. The widget renders all language blocks sequentially and renders the tags as literal text.
+  3. Render an `ExpansionTile` with `tilePadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h)` without `minTileHeight`. The tile measures outside the Figma spec height.
+- **Root cause:**
+  1. The backend stores localized translations inside pseudo-tags (`<ar>`, `<en>`, `<cs-CZ>`) that are escaped by rich text editors (`&lt;ar&gt;`). Because `<ar>` is not a standard HTML element, HTML parsers treat it and all foreign language blocks as visible text nodes.
+  2. In Flutter `ExpansionTile`, the header is built upon `ListTile` which defaults to `minTileHeight: 56.0` and applies internal vertical padding unless explicitly overridden with `minTileHeight: 62.h` and constrained.
+- **Rule:**
+  1. Always parse and extract the target locale block using a dedicated parser (`HtmlContentParser.parse(html, languageCode: code)`), strip foreign language pseudo-tags while strictly preserving standard HTML elements (`(?!li|ul|ol|tr|td|th|hr|br|em|h[1-6]|b|p|a|i\b)`), and decode entity-escaped HTML tags (`&lt;` -> `<`) so `HtmlWidget` renders authentic native HTML.
+  2. Enforce strict accordion card heights using `minTileHeight: 62.h`, zero out vertical tile padding (`tilePadding: EdgeInsets.symmetric(horizontal: 16.w)`), and wrap in `Container(constraints: BoxConstraints(minHeight: 62.h))`.
+- **Bad pattern:**
+
+```dart
+// BUG: Dumps all language blocks and raw tags onto the screen as text
+HtmlWidget(
+  page.content,
+  textStyle: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+)
+
+// BUG: Height fluctuates with default ListTile padding, not adhering to 62.h spec
+ExpansionTile(
+  tilePadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+  title: CustomText(question),
+)
 ## [UI-003] Never filter out unavailable product variants at DTO parsing or presentation layers; display with disabled styling and guard selection
 
 - **Scope:** Shared (`panda-m`)
@@ -138,6 +446,152 @@ final availableOptions = group.options.where((o) => o.isAvailable).toList();
 - **Good pattern:**
 
 ```dart
+// Parse and isolate current locale's content, decoding HTML entities
+final languageCode = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
+final parsedHtml = HtmlContentParser.parse(html, languageCode: languageCode);
+
+if (parsedHtml.isNotEmpty) {
+  HtmlWidget(
+    parsedHtml,
+    renderMode: RenderMode.column,
+    textStyle: DefaultTextStyle.of(context).style.copyWith(
+      fontFamily: 'Noto Sans Arabic',
+      fontSize: 14.sp,
+      height: 1.6,
+      color: context.appColors.text.secondary,
+    ),
+  );
+}
+
+// Strict 62.h collapsed height for FAQ accordion tiles
+Container(
+  constraints: BoxConstraints(minHeight: 62.h),
+  child: ExpansionTile(
+    minTileHeight: 62.h,
+    tilePadding: EdgeInsets.symmetric(horizontal: 16.w),
+    childrenPadding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
+    title: CustomText(
+      widget.question,
+      fontSize: 14.sp,
+      fontWeight: FontWeight.w600,
+      color: context.appColors.black.c90,
+    ),
+    children: [
+      FaqAnswerWidget(html: widget.answer),
+    ],
+  ),
+)
+```
+
+- **Why this solution is preferred:** Isolates localized content cleanly without showing confusing foreign text or technical tags, ensures standard HTML markup (`<p>`, `<b>`, `<li>`) renders properly with design system typography (`Noto Sans Arabic`), and guarantees exact height conformity to Figma design specifications.
+- **Exceptions / caveats:** When parsing language blocks, ensure the regex negative lookahead excludes all valid short HTML tags (`li`, `ul`, `ol`, `tr`, `td`, `th`, `hr`, `br`, `em`, `p`, `b`, `a`, `i`, `h1`-`h6`) so list items or table tags are never stripped.
+- **Regression scenario:**
+  - **Given** a static page with multilingual CMS content (`<p>&lt;ar&gt;</p><p>نص عربي</p><p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`) and an FAQ list
+  - **When** the page and FAQ accordion render
+  - **Then** only the Arabic content displays without foreign text or raw tags, and the collapsed FAQ tile measures at least `62.h`
+- **Automated test:** `test/features/shared/static_pages/html_content_parser_test.dart` (`flutter test test/features/shared/static_pages/html_content_parser_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 8 parser/widget tests and all 26 static page tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`, `[NET-001]`
+
+---
+
+## [UI-009] Canonical day chip mapping for structured schedule arrays and technical document title localization
+
+- **Category:** profile/settings, forms, API/data, localization
+- **Lifecycle:** initial-load, update-save
+- **Applicability:** Multi-day schedule selection chips (`Wrap`, `FilterChip`), form initialization from REST backend schedules, document attachment metadata translation.
+- **Symptom:**
+  1. Opening the edit profile screen displays 0 selected days (or dummy default fallback chips) even though the API returned a full 7-day `working_hours` array with active operating days (`"from": "09:00", "to": "17:00"`) and inactive days (`"from": null, "to": null`).
+  2. Document attachments whose type or title is a technical English string (`"health_certificate"`) display raw text in UI cards, tiles, and preview sheets instead of the localized Arabic string ("الشهادة الصحية").
+- **Root cause:**
+  1. The backend returns 7 day objects where inactive days have `"from": null`. The model parser was not filtering out null days, and added raw backend strings (`"Sunday"`, `"الأحد"`) directly to `workingDays`. In the UI, day chips were keyed by canonical short strings (`'sat'`, `'sun'`, `'mon'`, `'tue'`, `'wed'`, `'thu'`, `'fri'`). Because `'Sunday'` != `'sun'`, chip selection checks failed. Additionally, the form controller fell back to dummy default initializers (`['sun', 'mon']`) violating Rule 12.
+  2. Document tile and slot helpers prioritized non-empty raw `doc.title` over type-based localization. When the backend returned `title: "health_certificate"`, the technical identifier was displayed as-is rather than resolving to `'provider_profile.doc_health_certificate'.tr()`.
+- **Bad pattern:**
+
+```dart
+// BAD: Adding raw strings directly to workingDays without checking for null "from"
+if (hoursRaw is List) {
+  for (final item in hoursRaw) {
+    final dayLabel = (item['label'] ?? item['day'] ?? '').toString();
+    days.add(dayLabel); // "الأحد" or "Sunday"
+  }
+}
+
+// BAD: Initializing UI chips directly with raw strings and fake default fallback
+selectedDaysNotifier = ValueNotifier<List<String>>(
+  d?.workingDays.isNotEmpty == true ? List.from(d!.workingDays) : ['sun', 'mon'],
+);
+
+// BAD: Bypassing localization when title is non-empty even if technical
+final title = doc.title.isNotEmpty ? doc.title : resolveDefaultTitle(type);
+```
+
+- **Good pattern:**
+
+```dart
+// 1. In DTO/Model: Filter active days from working_hours where from != null
+final hoursRaw = specProfile['working_hours'] ?? json['working_hours'];
+if (hoursRaw is List) {
+  final List<String> activeHoursDays = [];
+  for (final item in hoursRaw) {
+    if (item is Map<String, dynamic>) {
+      final f = item['from']?.toString();
+      final t = item['to']?.toString();
+      if (f != null && f.isNotEmpty && f != 'null') {
+        final dayLabel = (item['label'] ?? item['day'] ?? '').toString();
+        if (dayLabel.isNotEmpty) activeHoursDays.add(dayLabel);
+        if (fromTime.isEmpty) fromTime = f;
+        if (toTime.isEmpty && t != null && t != 'null') toTime = t;
+      }
+    }
+  }
+  if (activeHoursDays.isNotEmpty) {
+    days.clear();
+    days.addAll(activeHoursDays);
+  }
+}
+
+// 2. In Form Controllers: Normalize raw strings to canonical day chip keys ('sat'..'fri')
+final initialDays = <String>[];
+if (d?.workingDays != null && d!.workingDays.isNotEmpty) {
+  for (final raw in d.workingDays) {
+    final order = ProviderScheduleFormatter.getDayOrder(raw);
+    if (order != null && order >= 0 && order < ProviderScheduleFormatter.allDays.length) {
+      final key = ProviderScheduleFormatter.allDays[order].key;
+      if (!initialDays.contains(key)) initialDays.add(key);
+    }
+  }
+}
+selectedDaysNotifier = ValueNotifier<List<String>>(initialDays);
+
+// 3. In Document Helpers: Intercept technical identifiers and resolve localization
+static String resolveDocumentTitle(ProviderDocumentEntity doc) {
+  final type = resolveDocumentType(doc);
+  final raw = doc.title.trim().toLowerCase();
+  const technical = {
+    '',
+    'health_certificate',
+    'health certificate',
+    'health-certificate',
+    'certificate',
+    'commercial_front',
+    'commercial_back',
+    'activity_license',
+  };
+  final isTech = technical.contains(raw) || raw == type.toLowerCase();
+  return isTech ? resolveDefaultTitle(type) : doc.title;
+}
+```
+
+- **Why this solution is preferred:** Normalizes heterogeneous backend day representations (Arabic text, English names, canonical keys) into canonical UI keys for reliable selection state, completely avoids dummy/synthetic fallback defaults (Rule 12), and ensures all technical document IDs consistently translate into user-facing localized labels.
+- **Exceptions / caveats:** When submitting profile edits back to the backend, map canonical UI keys back to the backend's expected day format (e.g. `'sun'` -> `'Sunday'`).
+- **Regression scenario:**
+  - **Given** a provider profile with `working_hours` array (Sunday, Monday, Saturday active; Tuesday-Friday null) and a `health_certificate` document
+  - **When** Edit Profile loads
+  - **Then** Sunday, Monday, and Saturday chips are selected while Tuesday-Friday remain unselected, time inputs show `"09:00 AM"` / `"05:00 PM"`, and the document displays `"الشهادة الصحية"`
+- **Automated test:** `test/features/provider/profile_live_contract_test.dart`
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 with `flutter test test/features/provider/profile_live_contract_test.dart` and `tool/verify.ps1 -Fast`.
+- **Related lessons:** `[UI-003]`, `[NET-001]`, `[UI-008]`
 // DTO parses all options, preserving isAvailable
 options: (json['options'] as List?)
     ?.map((e) => VariantOptionModel.fromJson(e))

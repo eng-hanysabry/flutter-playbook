@@ -82,3 +82,140 @@ void _updateLocalDishQty(
   - `packages/services/cart/test/cart_stock_and_variant_test.dart` (`flutter test packages/services/cart/test/cart_stock_and_variant_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all unit and widget tests in `resturant_home_test.dart`, `cart_quantity_test.dart`, `clothes_stock_and_cart_test.dart`, and `cart_stock_and_variant_test.dart` passed
 - **Related lessons:** None
+
+---
+
+## [STATE-002] Child Modular feature modules must resolve root-level dependencies via Modular.get instead of module-scoped injector i.get
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** architecture/di, state management, module wiring, error handling
+- **Lifecycle:** initialization, navigation, route-building
+- **Technical areas / data flow:** Flutter Modular (`flutter_modular`), `AutoInjector`, module scoping, root services (`NetworkingService`, `AppDatabase`)
+- **Applies when:** Flutter Modular 5.x / 6.x multi-module applications where global services are declared in root `AppModule` and accessed by child feature modules (`features/*/*_module.dart`)
+- **Symptom:** Navigating to a child module route or instantiating a BLoC/Cubit throws `BindNotFoundException: UnregisteredInstance: <Service> unregistered` during widget build or route resolution (e.g. `UnregisteredInstance: NetworkingService unregistered`).
+- **Reproduction:** In a child feature module's `binds(Injector i)` method, bind a data source using `i.get<NetworkingService>()` instead of `Modular.get<NetworkingService>()`, then navigate to the child module route.
+- **Root cause:** The child module injector `i` is an isolated `AutoInjector` instance that only searches binds defined inside that specific child module and its explicitly imported modules. It cannot resolve global services registered in the root `AppModule`. In contrast, `Modular.get<T>()` traverses the root Modular container tree.
+- **Rule:** Inside child feature modules, always resolve root-level singleton services (such as `NetworkingService`) via `Modular.get<T>()` rather than `i.get<T>()`, and enforce this statically with a linter rule and root-level route integration tests.
+- **Bad pattern:**
+
+```dart
+class ProfileModule extends Module {
+  @override
+  void binds(Injector i) {
+    i.addLazySingleton<EquipmentOwnerActivationRemoteDataSource>(
+      () => EquipmentOwnerActivationRemoteDataSourceImpl(
+        networkingService: i.get<NetworkingService>(), // CRASH: i cannot see root AppModule binds!
+      ),
+    );
+  }
+}
+```
+
+- **Good pattern:**
+
+```dart
+class ProfileModule extends Module {
+  @override
+  void binds(Injector i) {
+    i.addLazySingleton<EquipmentOwnerActivationRemoteDataSource>(
+      () => EquipmentOwnerActivationRemoteDataSourceImpl(
+        networkingService: Modular.get<NetworkingService>(), // SAFE: Modular.get delegates to root AppModule container
+      ),
+    );
+  }
+}
+```
+
+- **Why this solution is preferred:** Ensures reliable dependency resolution regardless of navigation path or module boundary, prevents runtime `BindNotFoundException` crashes on screen entry, and allows both modular routing and global service sharing.
+- **Exceptions / caveats:** Inside the root `AppModule` itself, using `i.get<NetworkingService>()` is valid because `NetworkingService` is registered directly within `AppModule`'s injector. In test doubles, if a test boots an isolated child module without `AppModule`, it must provide a mock/fake data source or mock module.
+- **Regression scenario:**
+  - **Given** an authenticated user on the profile screen
+  - **When** the user taps to navigate to `/profile/equipment-owner-register`
+  - **Then** `EquipmentOwnerActivationCubit` resolves `NetworkingService` without `BindNotFoundException` and `EquipmentOwnerRegisterPage` mounts cleanly.
+- **Automated test:**
+  - `test/features/client/profile/presentation/pages/equipment_owner_register_di_test.dart`
+  - Linter rule `no-child-module-root-di` in `tool/check_rules.dart`
+- **Verification:** Ran `flutter test test/features/client/profile/presentation/pages/equipment_owner_register_di_test.dart` (2 tests passed), `dart run tool/check_rules.dart` (OK, 0 violations), and `tool/verify.ps1 -Fast` (`VERIFY OK`).
+- **Related lessons:** None
+
+---
+
+## [STATE-003] Suppressing multiple error alerts during input editing after form submission failure
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** state management, error handling, ui/ux, form validation, bloc
+- **Lifecycle:** form submission, input editing, state emission
+- **Technical areas / data flow:** BLoC / Cubit state transition, `BlocConsumer.listenWhen`, `ActionAlert.show` overlay deduplication
+- **Applies when:** Form screens or edit views (e.g. profile edit, add equipment, registration) submit an action, encounter a failure, and the user subsequently edits input fields (`onChanged`).
+- **Symptom:** After an API error occurs, typing any character or changing any dropdown repeatedly triggers the error toast/alert (`showErrorAlert`) on every keystroke or change, spamming the user interface.
+- **Reproduction:** Submit a form with invalid data or broken connection to trigger a failure state. Then type characters in any text field or select another dropdown item. An error toast appears on each keystroke.
+- **Root cause:** 
+  1. Input change events in BLoC (e.g. `UpdateNameEvent`, `SelectCategoryEvent`) emit `state.copyWith(...)` without resetting `status` away from `failure` or without setting `errorMessage: null`. Thus every new keystroke emits a new state that still has `status == failure` and `errorMessage != null`.
+  2. The UI `BlocConsumer` / `BlocListener` lacks a `listenWhen` condition, causing the listener to re-execute on every state emission.
+  3. `ActionAlert.show` unconditionally cleared the previous overlay and mounted a new one, causing UI flashing without deduplication.
+- **Rule:** 
+  1. In `ActionAlert.show`, enforce automatic deduplication so identical error messages cannot re-mount within 2 seconds.
+  2. In all BLoCs handling form editing, every input change handler must transition `status` back to `loaded` / `ready` and clear `errorMessage`.
+  3. In all UI listeners (`BlocConsumer` / `BlocListener`), always provide `listenWhen: (prev, curr) => prev.status != curr.status || (curr.errorMessage != null && prev.errorMessage != curr.errorMessage)`.
+- **Bad pattern:**
+
+```dart
+// BLoC:
+void _onUpdateName(UpdateNameEvent event, Emitter<FormState> emit) {
+  emit(state.copyWith(name: event.name)); // Retains status == failure and previous errorMessage!
+}
+
+// UI:
+BlocConsumer<FormBloc, FormState>(
+  listener: (context, state) {
+    if (state.status == FormStatus.failure) {
+      context.showErrorAlert(state.errorMessage!); // Fires on EVERY keystroke!
+    }
+  },
+  builder: (context, state) => ...
+)
+```
+
+- **Good pattern:**
+
+```dart
+// BLoC:
+void _onUpdateName(UpdateNameEvent event, Emitter<FormState> emit) {
+  emit(state.copyWith(
+    status: state.status == FormStatus.failure ? FormStatus.loaded : state.status,
+    errorMessage: () => null,
+    name: event.name,
+  ));
+}
+
+// UI:
+BlocConsumer<FormBloc, FormState>(
+  listenWhen: (prev, curr) =>
+      prev.status != curr.status ||
+      (curr.errorMessage != null && prev.errorMessage != curr.errorMessage),
+  listener: (context, state) {
+    if (state.status == FormStatus.failure && state.errorMessage != null) {
+      context.showErrorAlert(state.errorMessage!);
+    }
+  },
+  builder: (context, state) => ...
+)
+
+// Design system global guard (ActionAlert):
+if (type == ActionAlertType.error) {
+  final now = DateTime.now();
+  if (_lastErrorMessage == message &&
+      _lastErrorTime != null &&
+      now.difference(_lastErrorTime!) < const Duration(seconds: 2)) {
+    return;
+  }
+  _lastErrorMessage = message;
+  _lastErrorTime = now;
+}
+```
+
+- **Why this solution is preferred:** Provides defense-in-depth: the global design-system layer suppresses accidental duplicate toasts, while the BLoC and UI layers maintain clean state contracts without stale failure states.
+- **Automated test:**
+  - `test/features/shared/notifications/push_preference_cubit_device_api_test.dart`
+- **Verification:** Verified with `flutter test` and `powershell -File .\tool\verify.ps1 -Fast` (`VERIFY OK`).
+- **Related lessons:** None
