@@ -206,3 +206,58 @@ _isLoadingNotifier.value = false;
 - **Automated test:** `test/features/provider/profile/presentation/bloc/profile_details_bloc_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 19 profile tests passed cleanly.
 - **Related lessons:** `[UI-003]`
+
+---
+
+## [UI-005] Sort and format localized working day schedules with unclipped flex banner rows
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Localization, Responsive UI, Typography
+- **Lifecycle:** Initial-load, Screen build, Localization
+- **Technical areas / data flow:** `ProviderWorkingScheduleCard`, day normalization, canonical week ordering (Saturday to Friday), consecutive range collapsing, flex rows
+- **Applies when:** Flutter 3.x / Dart 3.x displaying localized working schedule banners containing both variable-length day lists and formatted time period strings
+- **Symptom:** In summary schedule banners, hours text is truncated with ellipsis (`08:00 صباحًا — 05...`), and day lists appear unsorted or separated by plain dashes instead of canonical ranges or locale-appropriate commas (`، ` in Arabic, `, ` in English).
+- **Reproduction:** Wrap both the days label and the hours label in `Flexible(child: CustomText(..., overflow: TextOverflow.ellipsis))` inside a `Row`. When the days string grows (multiple days joined with commas), it shrinks the hours label until its descenders or trailing period are clipped.
+- **Root cause:** Simultaneous use of `Flexible` with `TextOverflow.ellipsis` on both sides of a horizontal `Row` causes competing flex space allocation. Without sorting days by standard calendar order (Saturday = 0 through Friday = 6), arbitrary incoming API array orders produce chaotic day displays.
+- **Rule:** Order incoming days strictly by canonical week order (Saturday to Friday). If the sorted days form an unbroken consecutive sequence, collapse them into a range (`startDay - endDay`); otherwise join them with locale-specific commas (`، ` in Arabic, `, ` in English). In the summary row, allocate remaining width to days via `Expanded` while allowing the formatted time period to size to its natural width without clipping.
+- **Bad pattern:**
+
+```dart
+// BUG: Arbitrary day order, plain dashes for non-continuous days, and hours truncated with ellipsis
+final daysStr = rawDays.join(' — ');
+Row(
+  children: [
+    Flexible(child: CustomText(daysStr, overflow: TextOverflow.ellipsis)),
+    Flexible(child: CustomText(hoursStr, overflow: TextOverflow.ellipsis)),
+  ],
+)
+```
+
+- **Good pattern:**
+
+```dart
+// 1. Sort by canonical week order (Saturday to Friday)
+final sortedOrders = ProviderScheduleFormatter.getSortedDayOrders(workingDays);
+
+// 2. Collapse continuous sequences into range (Sat - Mon) or join with localized comma
+final daysStr = ProviderScheduleFormatter.formatGroupedDays(sortedOrders, languageCode: locale.languageCode);
+
+// 3. Format hours without clipping
+Row(
+  children: [
+    Expanded(child: CustomText(daysStr, fontSize: 13.sp, fontWeight: FontWeight.w700)),
+    SizedBox(width: 8.w),
+    CustomText(hoursStr, fontSize: 13.sp, fontWeight: FontWeight.w700, textAlign: TextAlign.end),
+  ],
+)
+```
+
+- **Why this solution is preferred:** Guarantees predictable, professional RTL/LTR day order, produces readable day ranges (e.g. "السبت - الإثنين") or comma lists ("السبت، الإثنين، الأربعاء"), and ensures time periods are never truncated.
+- **Exceptions / caveats:** In individual child rows where width is constrained, use `Expanded` on the day label and natural sizing on the trailing clock icon/time row.
+- **Regression scenario:**
+  - **Given** working schedule data with continuous and non-continuous days
+  - **When** the profile schedule card renders in Arabic or English
+  - **Then** consecutive days must collapse into a dash range ("السبت - الإثنين"), non-consecutive days must display localized commas ("السبت، الإثنين، الأربعاء"), days must be ordered Saturday to Friday, and hours must display full unclipped text
+- **Automated test:** `test/features/provider/profile/presentation/widgets/provider_schedule_formatter_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 31 tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-004]`
