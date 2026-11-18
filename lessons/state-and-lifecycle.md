@@ -82,3 +82,58 @@ void _updateLocalDishQty(
   - `packages/services/cart/test/cart_stock_and_variant_test.dart` (`flutter test packages/services/cart/test/cart_stock_and_variant_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all unit and widget tests in `resturant_home_test.dart`, `cart_quantity_test.dart`, `clothes_stock_and_cart_test.dart`, and `cart_stock_and_variant_test.dart` passed
 - **Related lessons:** None
+
+---
+
+## [STATE-002] Child Modular feature modules must resolve root-level dependencies via Modular.get instead of module-scoped injector i.get
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** architecture/di, state management, module wiring, error handling
+- **Lifecycle:** initialization, navigation, route-building
+- **Technical areas / data flow:** Flutter Modular (`flutter_modular`), `AutoInjector`, module scoping, root services (`NetworkingService`, `AppDatabase`)
+- **Applies when:** Flutter Modular 5.x / 6.x multi-module applications where global services are declared in root `AppModule` and accessed by child feature modules (`features/*/*_module.dart`)
+- **Symptom:** Navigating to a child module route or instantiating a BLoC/Cubit throws `BindNotFoundException: UnregisteredInstance: <Service> unregistered` during widget build or route resolution (e.g. `UnregisteredInstance: NetworkingService unregistered`).
+- **Reproduction:** In a child feature module's `binds(Injector i)` method, bind a data source using `i.get<NetworkingService>()` instead of `Modular.get<NetworkingService>()`, then navigate to the child module route.
+- **Root cause:** The child module injector `i` is an isolated `AutoInjector` instance that only searches binds defined inside that specific child module and its explicitly imported modules. It cannot resolve global services registered in the root `AppModule`. In contrast, `Modular.get<T>()` traverses the root Modular container tree.
+- **Rule:** Inside child feature modules, always resolve root-level singleton services (such as `NetworkingService`) via `Modular.get<T>()` rather than `i.get<T>()`, and enforce this statically with a linter rule and root-level route integration tests.
+- **Bad pattern:**
+
+```dart
+class ProfileModule extends Module {
+  @override
+  void binds(Injector i) {
+    i.addLazySingleton<EquipmentOwnerActivationRemoteDataSource>(
+      () => EquipmentOwnerActivationRemoteDataSourceImpl(
+        networkingService: i.get<NetworkingService>(), // CRASH: i cannot see root AppModule binds!
+      ),
+    );
+  }
+}
+```
+
+- **Good pattern:**
+
+```dart
+class ProfileModule extends Module {
+  @override
+  void binds(Injector i) {
+    i.addLazySingleton<EquipmentOwnerActivationRemoteDataSource>(
+      () => EquipmentOwnerActivationRemoteDataSourceImpl(
+        networkingService: Modular.get<NetworkingService>(), // SAFE: Modular.get delegates to root AppModule container
+      ),
+    );
+  }
+}
+```
+
+- **Why this solution is preferred:** Ensures reliable dependency resolution regardless of navigation path or module boundary, prevents runtime `BindNotFoundException` crashes on screen entry, and allows both modular routing and global service sharing.
+- **Exceptions / caveats:** Inside the root `AppModule` itself, using `i.get<NetworkingService>()` is valid because `NetworkingService` is registered directly within `AppModule`'s injector. In test doubles, if a test boots an isolated child module without `AppModule`, it must provide a mock/fake data source or mock module.
+- **Regression scenario:**
+  - **Given** an authenticated user on the profile screen
+  - **When** the user taps to navigate to `/profile/equipment-owner-register`
+  - **Then** `EquipmentOwnerActivationCubit` resolves `NetworkingService` without `BindNotFoundException` and `EquipmentOwnerRegisterPage` mounts cleanly.
+- **Automated test:**
+  - `test/features/client/profile/presentation/pages/equipment_owner_register_di_test.dart`
+  - Linter rule `no-child-module-root-di` in `tool/check_rules.dart`
+- **Verification:** Ran `flutter test test/features/client/profile/presentation/pages/equipment_owner_register_di_test.dart` (2 tests passed), `dart run tool/check_rules.dart` (OK, 0 violations), and `tool/verify.ps1 -Fast` (`VERIFY OK`).
+- **Related lessons:** None
