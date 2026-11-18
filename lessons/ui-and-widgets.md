@@ -375,3 +375,92 @@ Container(
 - **Automated test:** `test/features/provider/statistics/presentation/pages/ratings_page_test.dart` (`flutter test test/features/provider/statistics/presentation/pages/ratings_page_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 16 statistics and ratings tests passed cleanly with 0 analyzer issues.
 - **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`
+
+
+---
+
+## [UI-008] Parsing CMS multilingual pseudo-tags and enforcing design token collapsed tile heights on ExpansionTile
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Shared components, RTL & Localization, Responsive UI, API/data
+- **Lifecycle:** Initial-load, Screen build, Localization
+- **Technical areas / data flow:** CMS content rendering, `flutter_widget_from_html_core` (`HtmlWidget`), `ExpansionTile`, `minTileHeight`, `BoxConstraints`, regex multilingual extraction
+- **Applies when:** Flutter 3.x / Dart 3.x applications consuming CMS or admin-panel rich text APIs containing embedded language tags (e.g. `<p>&lt;ar&gt;</p>...<p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`) and rendering accordion FAQ lists matching Figma design tokens.
+- **Symptom:**
+  1. Static pages (e.g., Contact Us, About, Terms) display a massive dump of unparsed foreign language blocks and raw metadata tags (`<ar>`, `</ar>`, `<cs-CZ>`, `&lt;ar&gt;`) as plain text on the screen instead of clean native HTML in the user's selected language.
+  2. Accordion FAQ tiles expand or shrink to arbitrary heights dictated by default `ListTile` vertical padding instead of strictly matching the design token specification (e.g., `62.h`).
+- **Reproduction:**
+  1. Query a static page endpoint (e.g. `GET api/v1/client/pages/contact`) returning multilingual body HTML with `<p>&lt;ar&gt;</p>...<p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`.
+  2. Pass the raw string directly to `HtmlWidget(html)`. The widget renders all language blocks sequentially and renders the tags as literal text.
+  3. Render an `ExpansionTile` with `tilePadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h)` without `minTileHeight`. The tile measures outside the Figma spec height.
+- **Root cause:**
+  1. The backend stores localized translations inside pseudo-tags (`<ar>`, `<en>`, `<cs-CZ>`) that are escaped by rich text editors (`&lt;ar&gt;`). Because `<ar>` is not a standard HTML element, HTML parsers treat it and all foreign language blocks as visible text nodes.
+  2. In Flutter `ExpansionTile`, the header is built upon `ListTile` which defaults to `minTileHeight: 56.0` and applies internal vertical padding unless explicitly overridden with `minTileHeight: 62.h` and constrained.
+- **Rule:**
+  1. Always parse and extract the target locale block using a dedicated parser (`HtmlContentParser.parse(html, languageCode: code)`), strip foreign language pseudo-tags while strictly preserving standard HTML elements (`(?!li|ul|ol|tr|td|th|hr|br|em|h[1-6]|b|p|a|i\b)`), and decode entity-escaped HTML tags (`&lt;` -> `<`) so `HtmlWidget` renders authentic native HTML.
+  2. Enforce strict accordion card heights using `minTileHeight: 62.h`, zero out vertical tile padding (`tilePadding: EdgeInsets.symmetric(horizontal: 16.w)`), and wrap in `Container(constraints: BoxConstraints(minHeight: 62.h))`.
+- **Bad pattern:**
+
+```dart
+// BUG: Dumps all language blocks and raw tags onto the screen as text
+HtmlWidget(
+  page.content,
+  textStyle: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+)
+
+// BUG: Height fluctuates with default ListTile padding, not adhering to 62.h spec
+ExpansionTile(
+  tilePadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+  title: CustomText(question),
+)
+```
+
+- **Good pattern:**
+
+```dart
+// Parse and isolate current locale's content, decoding HTML entities
+final languageCode = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
+final parsedHtml = HtmlContentParser.parse(html, languageCode: languageCode);
+
+if (parsedHtml.isNotEmpty) {
+  HtmlWidget(
+    parsedHtml,
+    renderMode: RenderMode.column,
+    textStyle: DefaultTextStyle.of(context).style.copyWith(
+      fontFamily: 'Noto Sans Arabic',
+      fontSize: 14.sp,
+      height: 1.6,
+      color: context.appColors.text.secondary,
+    ),
+  );
+}
+
+// Strict 62.h collapsed height for FAQ accordion tiles
+Container(
+  constraints: BoxConstraints(minHeight: 62.h),
+  child: ExpansionTile(
+    minTileHeight: 62.h,
+    tilePadding: EdgeInsets.symmetric(horizontal: 16.w),
+    childrenPadding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
+    title: CustomText(
+      widget.question,
+      fontSize: 14.sp,
+      fontWeight: FontWeight.w600,
+      color: context.appColors.black.c90,
+    ),
+    children: [
+      FaqAnswerWidget(html: widget.answer),
+    ],
+  ),
+)
+```
+
+- **Why this solution is preferred:** Isolates localized content cleanly without showing confusing foreign text or technical tags, ensures standard HTML markup (`<p>`, `<b>`, `<li>`) renders properly with design system typography (`Noto Sans Arabic`), and guarantees exact height conformity to Figma design specifications.
+- **Exceptions / caveats:** When parsing language blocks, ensure the regex negative lookahead excludes all valid short HTML tags (`li`, `ul`, `ol`, `tr`, `td`, `th`, `hr`, `br`, `em`, `p`, `b`, `a`, `i`, `h1`-`h6`) so list items or table tags are never stripped.
+- **Regression scenario:**
+  - **Given** a static page with multilingual CMS content (`<p>&lt;ar&gt;</p><p>نص عربي</p><p>&lt;/ar&gt;</p><p>&lt;cs-CZ&gt;</p>...`) and an FAQ list
+  - **When** the page and FAQ accordion render
+  - **Then** only the Arabic content displays without foreign text or raw tags, and the collapsed FAQ tile measures at least `62.h`
+- **Automated test:** `test/features/shared/static_pages/html_content_parser_test.dart` (`flutter test test/features/shared/static_pages/html_content_parser_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 8 parser/widget tests and all 26 static page tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`, `[NET-001]`
