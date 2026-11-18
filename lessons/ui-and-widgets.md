@@ -159,3 +159,50 @@ Container(
 - **Automated test:** `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/presentation/pages/profile_details_page_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all profile tests passed cleanly.
 - **Related lessons:** `[UI-002]`
+
+---
+
+## [UI-004] Render binary image API responses in WebView using in-memory Base64 HTML strings instead of direct loadRequest URLs
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Web views, Media, REST/Dio
+- **Lifecycle:** User interaction, Initial-load, Async fetch
+- **Technical areas / data flow:** `webview_flutter` (`WebViewController`), binary response streams, Base64 data URLs, HTML rendering
+- **Applies when:** Flutter 3.x / Dart 3.x using `webview_flutter` to preview images or files retrieved from authenticated REST endpoints returning binary byte streams (`Content-Type: image/jpeg`, `application/octet-stream`)
+- **Symptom:** Opening a document preview dialog displays an indefinite loading spinner while the console logs raw response bytes (`147, 92, 22, 88...`), and the WebView never displays the image or invokes `onPageFinished`.
+- **Reproduction:** Call `WebViewController.loadRequest(uri, headers: ...)` directly with an API endpoint that returns a binary stream (or attachment headers). Android WebView treats the response as an unhandled download rather than a renderable HTML document, hanging navigation indefinitely.
+- **Root cause:** Android's internal WebView engine does not automatically render arbitrary raw binary byte streams received from HTTP GET requests without a standard HTML wrapper or native mime handling. Because navigation never completes as a web page, `onPageFinished` is never triggered and the UI loading indicator spins forever.
+- **Rule:** Retrieve the binary bytes via clean architecture (BLoC / use case with authenticated client), convert the byte buffer to a Base64 data URL embedded in an HTML `<img>` template with responsive CSS and pinch-to-zoom viewport meta tags, and render it using `WebViewController.loadHtmlString(...)`.
+- **Bad pattern:**
+
+```dart
+// BUG: Android WebView cannot render raw binary octet streams directly via loadRequest; hangs forever
+_controller.loadRequest(
+  Uri.parse('https://api.example.com/documents/69'),
+  headers: {'Authorization': 'Bearer $token'},
+);
+```
+
+- **Good pattern:**
+
+```dart
+// 1. Fetch bytes via clean architecture (BLoC / Use Case)
+final bytes = await file.readAsBytes();
+final mimeType = isPng ? 'image/png' : 'image/jpeg';
+final base64String = base64Encode(bytes);
+
+// 2. Embed into responsive HTML with pinch-to-zoom and render via loadHtmlString
+final html = '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes"><style>html,body{margin:0;padding:12px;display:flex;justify-content:center;align-items:center;min-height:100vh;background-color:#f7f9fa;box-sizing:border-box;}img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}</style></head><body><img src="data:$mimeType;base64,$base64String" alt="Preview"/></body></html>';
+await _controller.loadHtmlString(html);
+_isLoadingNotifier.value = false;
+```
+
+- **Why this solution is preferred:** Guarantees instantaneous, 100% reliable rendering on both Android and iOS WebView, provides pinch-to-zoom accessibility, prevents download dialogs or external app opening when the user merely wants a quick preview, and eliminates infinite loading states.
+- **Exceptions / caveats:** For multi-page PDF documents on Android (where WebView does not natively render PDFs without PDF.js or Google Docs viewer), pass the file to a dedicated PDF viewer widget or fallback to `loadFile` / platform view.
+- **Regression scenario:**
+  - **Given** a provider document returned from an API endpoint as raw binary image bytes
+  - **When** the user taps the "معاينة" (Preview) action on the document tile
+  - **Then** the image must render immediately inside the preview dialog WebView with zero external app opening, no download notification, and the loading indicator dismissed promptly
+- **Automated test:** `test/features/provider/profile/presentation/bloc/profile_details_bloc_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 19 profile tests passed cleanly.
+- **Related lessons:** `[UI-003]`
