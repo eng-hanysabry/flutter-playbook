@@ -23,10 +23,10 @@
 
 - **Why this solution is preferred:** Safety, correctness, simplicity, compatibility and testability
 - **Exceptions / caveats:** When the rule does not apply; include version/platform variants
-- **Regression scenario:** Given / When / Then
+- **Regression scenario:** Given / When / Then (specify relevant scenarios: rapid repeated user actions, out-of-order responses, boundary values, or cross-feature behavioral parity)
 - **Automated test:** Actual application test path and command, or `not yet automated` with reason
 - **Verification:** What was run and its real result; include relevant SDK/package versions
-- **Related lessons:** IDs only; do not duplicate their contents
+- **Related lessons:** IDs only; list complementary or combinable lessons (do not duplicate their contents)
 
 ## Before saving
 

@@ -31,10 +31,44 @@ This small rule is the only playbook integration allowed in an application repos
 10. If the clone URL, credentials, registry, worktree, lock, dirty state or merge conflicts prevent safe synchronization, state the exact blocker. Never discard changes, force-push, or pretend sync succeeded. Continue the requested application task when safe, but do not write/push playbook knowledge until the blocker is resolved.
 11. After successful synchronization, read the external `GLOBAL_AGENT_RULES.md` and `INDEX.md`. Retrieve only matching lesson content when the request involves project code, design, debugging, tests, build/release or engineering decisions.
 
-## B. How to interpret every user prompt
+## B. How to interpret every user prompt — Mandatory 6-Step Gated Sequence
 
-- For EVERY task involving Flutter/Dart application code (bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements), automatically activate this workflow and read `GLOBAL_AGENT_RULES.md`, `INDEX.md`, and all relevant existing lessons BEFORE investigating or modifying application code.
-- **Mandatory activation:** The user does NOT need to mention the Playbook or paste a special execution prompt. Do not wait for the user to ask for investigation, testing, documentation, or Playbook updates, and do not treat the Playbook as optional guidance.
+For EVERY task involving Flutter/Dart application code (bug fixes, feature development, UI changes, refactoring, code reviews, debugging, testing, and performance improvements), automatically follow the external Flutter Playbook workflow.
+
+### Mandatory 6-Step Pre-Investigation Sequence (Strict Gate)
+Before investigating, reading, or modifying application code, you MUST execute these steps in exact sequential order:
+1. **Verify project ID and external worktree:** Verify that the application's registered project ID matches and that the external Playbook worktree exists, is clean, and is on branch `project/<project-id>`.
+2. **Read foundation rules:** Read `GLOBAL_AGENT_RULES.md` and `INDEX.md` from the external worktree.
+3. **Search Playbook for related lessons:** Search the Playbook topic files (`lessons/`) for existing lessons related to the reported issue, including relevant concepts, symptoms, implementation mechanisms, architectural components, and previous bug patterns.
+4. **Read all relevant lessons completely:** Read all identified relevant lessons completely from beginning to end (do not skim or read only titles/summaries). If a relevant lesson cannot be found or read, report that explicitly before proceeding.
+5. **Identify, combine & explain relevance (Visible Playbook Preflight):**
+   - Identify which previous lessons apply (single or combined) and explain their relevance before inspecting or modifying application code.
+   - Combine multiple lessons when evidence supports their relevance to different facets of the problem.
+   - Treat lessons as guidance rather than predetermined diagnoses.
+   - Emit the mandatory visible preflight block before inspecting any application source code:
+     ```
+     PLAYBOOK PREFLIGHT
+     - Project ID: <project-id>
+     - Worktree and branch: <path> (<branch>)
+     - Relevant lessons found: <lesson-ids or 'None'>
+     - Why each lesson is relevant: <brief explanation per lesson>
+     - Investigation areas suggested by the lessons: <suggested focus areas>
+     - Knowledge retrieval completed.
+     ```
+6. **Begin application investigation & implementation:** ONLY THEN begin application investigation, reproduction, and implementation.
+
+### Strict Execution & Integrity Rules
+- **Strict Pre-Investigation Gate:** Never read, search, or modify application source files before completing steps 1 through 5 and emitting the visible PLAYBOOK PREFLIGHT.
+- **Zero Retroactive Claims:** Never claim a lesson was applied if it was read after application investigation or implementation started.
+- **Evidence-Based Order Proof:** Never claim pre-investigation reads occurred unless the execution order in the tool calls and execution trace explicitly proves it. Claiming pre-investigation reads when files were read after application code was read or edited is a critical integrity violation.
+- **Explicit Reporting:** If a relevant lesson cannot be found or read, report that explicitly before proceeding.
+- **Evidence-Based Multi-Layer Root-Cause Analysis:** Investigate causes across relevant layers (business logic, state management, event ordering, API synchronization, widget lifecycle, shared caches, navigation, recovery) based on evidence. For state management (BLoC, Riverpod, Provider, etc.), investigate actual event transformers, listeners, equality, and emissions without guessing.
+- **Cross-Feature Behavioral Consistency:** Different features implementing the same business operation (e.g. Cart vs Recommendations quantity changes) must satisfy the same expected business behavior without forcing identical architecture.
+- **Prioritized Scenario Coverage:** Select tests prioritizing relevant failure scenarios (rapid repeated actions, out-of-order responses, stale responses, boundary values, cross-feature parity).
+- **Deduplication:** Reuse existing lessons; do not create duplicate lessons or commits.
+- **Minimal Changes:** Implement only what is strictly necessary to satisfy the user's request.
+- **Approval Boundaries:** Never create, update, auto-merge, or merge Pull Requests (owned by user).
+- **External Git Only:** Commit and push only justified Playbook knowledge changes to `project/<project-id>`.
 - **Preflight failure:** If the Playbook worktree, required instructions, or relevant lessons cannot be located or read, stop before implementation and report the exact problem. Never claim the workflow was activated successfully unless the required pre-investigation reads succeeded.
 - **Scope control:** Always implement the smallest correct change that satisfies the user's request without unrelated refactoring. For non-engineering conversations, explanations, translations, and general questions that do not involve Flutter code changes or reviews, do not execute the engineering workflow.
 
