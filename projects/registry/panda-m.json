@@ -1,0 +1,19 @@
+{
+  "project_id": "panda-m",
+  "display_name": "Panda",
+  "git_remotes": [
+    "github.com/geexar/panda-m",
+    "https://github.com/geexar/panda-m.git",
+    "git@github.com:geexar/panda-m.git"
+  ],
+  "playbook_branch": "project/panda-m",
+  "profile": {
+    "stack": [
+      "flutter",
+      "dart"
+    ],
+    "architecture": "clean-architecture-bloc-modular-melos",
+    "flutter_version": "3.35.1",
+    "dart_version": "^3.8.1 (runtime 3.9.0)"
+  }
+}
