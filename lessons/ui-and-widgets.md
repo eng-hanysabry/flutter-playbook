@@ -261,3 +261,51 @@ Row(
 - **Automated test:** `test/features/provider/profile/presentation/widgets/provider_schedule_formatter_test.dart` and `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 31 tests passed cleanly.
 - **Related lessons:** `[UI-003]`, `[UI-004]`
+
+---
+
+## [UI-006] Preserve persistent document upload slots on deletion during edit flows with register-matching validation
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Forms, Profile/Settings, Validation UX, Shared components
+- **Lifecycle:** Update-save, Delete, Submit, Screen build
+- **Technical areas / data flow:** Document management, slot-based UI state (`ProfileEditDocumentSlot`), multipart uploads, client-side validation toasts
+- **Applies when:** Flutter 3.x / Dart 3.x applications with edit flows for professional profiles or documents where mandatory verification attachments can be replaced
+- **Symptom:** In profile edit forms, deleting an existing attachment removes the entire widget tile from the tree, shrinking or hiding the card and leaving the user with no UI placeholder to upload a replacement document, while allowing form submission without mandatory documents.
+- **Reproduction:** Call `.removeWhere((doc) => doc.id == id)` on the documents list when the user taps delete, causing the document card to vanish, and tap save without enforcing that every required document category is satisfied.
+- **Root cause:** Treating editable document attachments as an ephemeral list of existing items rather than a fixed set of required category slots (`certificate`, `health_certificate`, `commercial_front`, `commercial_back`, `activity_license`). When an existing document was deleted, the slot was erased from the UI rather than transitioning to an empty upload placeholder.
+- **Rule:** Model documents in edit flows as category-bound slots (`ProfileEditDocumentSlot`) tracking original document, deletion flag, and replacement file. When an attachment is deleted, retain its position in the UI and render the empty upload placeholder card (with dashed border, category title, and file picker) matching the registration step. Block form save and alert the user with localized error toasts if any required document slot is missing an attachment.
+- **Bad pattern:**
+```dart
+// BUG: Removing the document erases the slot from the UI and allows saving without required doc
+void _onRemoveDocument(String docId) {
+  _documentsNotifier.value = List.from(_documentsNotifier.value)
+    ..removeWhere((doc) => doc.id == docId);
+}
+```
+- **Good pattern:**
+```dart
+// Slot remains in place as replacement upload placeholder
+void _onRemoveDocument(String slotId) {
+  _slotsNotifier.value = _slotsNotifier.value
+      .map((s) => s.id == slotId ? s.copyWith(isDeleted: true, clearNewFile: true) : s)
+      .toList();
+}
+
+// Validation enforces all required slots are satisfied before submit
+final missingSlot = ProfileEditDocumentHelper.findMissingDocumentSlot(_slotsNotifier.value);
+if (missingSlot != null) {
+  context.showErrorAlert(ProfileEditDocumentHelper.getMissingDocumentMessage(missingSlot));
+  return;
+}
+```
+- **Why this solution is preferred:** Maintains a clear, persistent visual affordance for the user to upload replacement documents without navigating away, guarantees that required verification documents are never accidentally bypassed on profile update, and mirrors the exact UX and error messages of the registration wizard.
+- **Exceptions / caveats:** Optional document types (if configured by backend metadata) should allow empty states; required document types must strictly block form submission when empty.
+- **Regression scenario:**
+  - **Given** a provider profile edit screen with an existing uploaded certificate
+  - **When** the user taps the delete icon on the certificate tile
+  - **Then** the card must not disappear; it must transition to the empty upload card placeholder, and tapping save must show an error alert ("يرجى رفع الشهادة المهنية") until a replacement file is picked
+- **Automated test:** `test/features/provider/profile/presentation/pages/profile_edit_page_test.dart` (`flutter test test/features/provider/profile/presentation/pages/profile_edit_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 42 tests passed cleanly.
+- **Related lessons:** `[UI-003]`, `[UI-005]`
+
