@@ -102,3 +102,60 @@ AppScaffold(
 - **Automated test:** `test/features/provider/home/presentation/pages/home_page_test.dart` and `test/features/provider/portfolio/presentation/pages/portfolio_page_test.dart` (`flutter test test/features/provider/home/presentation/pages/home_page_test.dart test/features/provider/portfolio/presentation/pages/portfolio_page_test.dart`)
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — `00:02 +8: All tests passed!`
 - **Related lessons:** `[UI-001]`
+
+---
+
+## [UI-003] Never combine tight explicit vertical padding with fixed height on buttons displaying localized text with descenders
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Responsive UI, Localization, Typography
+- **Lifecycle:** User interaction, Screen build, Localization
+- **Technical areas / data flow:** Button widgets (`Container`, `AppButton`, `CustomText`), font metrics (`Noto Sans Arabic`), vertical alignment and clipping
+- **Applies when:** Flutter 3.x / Dart 3.x with fixed-height button containers (`height: 46.h` / `48.h`) displaying non-Latin or Arabic typography with glyphs extending below baseline (`تسجيل الخروج`)
+- **Symptom:** The bottom portion of Arabic letters with bottom descenders (such as `ج` in `الخروج` or `ر`) is visibly clipped off at the bottom border of the button.
+- **Reproduction:** Set a fixed button container height (`height: 46.h`), add explicit vertical padding (`padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 20.w)`), and render Arabic text with rigid line height (`height: 20 / 14`). The available inner height becomes `46 - 24 = 22.h`, clipping bottom glyph descenders.
+- **Root cause:** Combining a rigid container `height` with explicit `vertical` padding severely constrains the inner vertical layout space (`inner_height = height - (2 * vertical_padding)`). Because Arabic font metrics in `Noto Sans Arabic` allocate additional descent space for letters like `ج`, `ح`, `خ`, `ع`, `غ`, `ر`, `ز`, the text overflows the inner bounds and clips at the container edge.
+- **Rule:** On fixed-height action buttons, omit explicit vertical padding (or use `EdgeInsets.symmetric(horizontal: ...)`) and center the text with `alignment: Alignment.center` within an adequate height (`48.h`), allowing the text widget to use the full container vertical span without descender clipping.
+- **Bad pattern:**
+
+```dart
+Container(
+  width: double.infinity,
+  height: 46.h,
+  // BUG: 12.h * 2 leaves only 22.h for 14.sp Arabic text with descenders, clipping the bottom.
+  padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 20.w),
+  alignment: Alignment.center,
+  child: CustomText(
+    'profile.logout'.tr(), // "تسجيل الخروج"
+    fontSize: 14.sp,
+    height: 20 / 14,
+  ),
+)
+```
+
+- **Good pattern:**
+
+```dart
+Container(
+  width: double.infinity,
+  height: 48.h,
+  // Omit vertical padding; let alignment: Alignment.center use the full 48.h span.
+  padding: EdgeInsets.symmetric(horizontal: 20.w),
+  alignment: Alignment.center,
+  child: CustomText(
+    'profile.logout'.tr(),
+    fontSize: 14.sp,
+    fontWeight: FontWeight.w700,
+  ),
+)
+```
+
+- **Why this solution is preferred:** Centers text cleanly without clipping descenders or diacritics across varying localized strings and ScreenUtil scaling factors.
+- **Exceptions / caveats:** When a button's height is determined dynamically by its content (no fixed `height:`), symmetric vertical padding is appropriate and necessary.
+- **Regression scenario:**
+  - **Given** Client Profile and Provider Profile screens with dangerous action logout buttons
+  - **When** the page renders in Arabic
+  - **Then** the text "تسجيل الخروج" must render with full descenders visible and zero bottom border clipping
+- **Automated test:** `test/features/provider/profile/presentation/pages/profile_details_page_test.dart` (`flutter test test/features/provider/profile/presentation/pages/profile_details_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all profile tests passed cleanly.
+- **Related lessons:** `[UI-002]`
