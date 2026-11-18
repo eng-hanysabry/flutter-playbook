@@ -309,3 +309,69 @@ if (missingSlot != null) {
 - **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 42 tests passed cleanly.
 - **Related lessons:** `[UI-003]`, `[UI-005]`
 
+
+---
+
+## [UI-007] Display normalized 1-5 rating distribution rows on zero-rating analytics states instead of hiding cards, with unified subtle surface shadows
+
+- **Scope:** Shared (`benaaamen-m`)
+- **Categories:** UI and widgets, Dashboards, Responsive UI, RTL & Localization, Shared components
+- **Lifecycle:** Initial-load, Screen build, Empty states
+- **Technical areas / data flow:** Ratings breakdown card, rating summary header, empty state management, BoxShadow elevation consistency, RTL row directionality
+- **Applies when:** Flutter 3.x / Dart 3.x applications presenting user/provider performance metrics, rating distributions, or customer reviews lists
+- **Symptom:** When an entity has zero ratings, the entire ratings breakdown component or the full ratings page is hidden behind an empty-state illustration (`AppEmptyState`), hiding the expected dashboard UI structure. In addition, cards across related screens (e.g. statistics vs. ratings) display inconsistent elevation or missing shadows, and RTL progress bars invert the position of the star label and linear indicators.
+- **Reproduction:** Return null or an empty distribution array `[]` from the repository, causing `ProviderRatingsContentWidget` to return `AppEmptyState`, or mapping over an empty `distribution` list producing 0 indicator rows, leaving the user with an empty screen rather than the structured 5-star dashboard breakdown.
+- **Root cause:** Relying directly on raw API distribution arrays (`distribution.map(...)`) without normalization, and triggering full-screen empty state guards when metric counts are zero instead of rendering the standard zero-state metrics card.
+- **Rule:** Always normalize star distributions to exactly 5 rows (stars 5 down to 1) using `List.generate(5, ...)` with a fallback percentage of `0.0` when zero ratings exist. Keep the card and header visible on the screen so the user sees the expected UI structure. Apply the unified brand elevation `BoxShadow(color: context.appColors.primary.c100.withValues(alpha: 0.04), blurRadius: 10.r, offset: Offset(0, 4.h))` consistently across all metric and review cards. In RTL Arabic layouts, place leading elements (overall score, star number & icon) at `children[0]` (physical RIGHT) and trailing elements (progress bars, rating pills) at `children[last]` (physical LEFT).
+- **Bad pattern:**
+```dart
+// BUG: Hides entire screen behind empty state when ratings are null or 0
+if (ratings == null) {
+  return AppEmptyState(...);
+}
+
+// BUG: Only renders rows returned by API, disappearing completely on empty ratings
+Column(
+  children: distribution.map((item) => ...).toList(),
+)
+```
+- **Good pattern:**
+```dart
+// Normalize to 5 rows (5 down to 1) with 0.0 fallback
+final rows = List.generate(5, (index) {
+  final star = 5 - index;
+  final found = distribution.where((e) => e.stars == star);
+  return found.isNotEmpty
+      ? found.first
+      : RatingDistributionEntity(stars: star, percentage: 0.0);
+});
+
+// Render ratings card with unified brand shadow and persistent UI structure
+Container(
+  decoration: BoxDecoration(
+    color: context.appColors.white,
+    borderRadius: BorderRadius.circular(16.r),
+    border: Border.all(
+      color: context.appColors.primary.c20.withValues(alpha: 0.6),
+      width: 1.w,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: context.appColors.primary.c100.withValues(alpha: 0.04),
+        blurRadius: 10.r,
+        offset: Offset(0, 4.h),
+      ),
+    ],
+  ),
+  child: ...
+)
+```
+- **Why this solution is preferred:** Preserves predictable dashboard and reviews screen layouts regardless of new-user vs. established-user status, eliminates layout jarring when receiving a first review, aligns RTL reading direction correctly, and creates visual harmony through unified card shadows.
+- **Exceptions / caveats:** For child list collections (such as actual user review comments), show a localized empty notice (`provider_statistics.no_reviews_yet`) beneath the persistent summary card rather than hiding the entire page.
+- **Regression scenario:**
+  - **Given** a service provider with zero reviews and zero ratings
+  - **When** the provider navigates to the ratings page (`/provider_statistics/ratings`)
+  - **Then** the page must NOT hide behind `AppEmptyState`; it must display the summary card with 0.0 average and 5 visible star distribution rows (5 to 1) at 0% with consistent card shadows, followed by the empty reviews notice
+- **Automated test:** `test/features/provider/statistics/presentation/pages/ratings_page_test.dart` (`flutter test test/features/provider/statistics/presentation/pages/ratings_page_test.dart`)
+- **Verification:** Verified on Flutter 3.35.1 / Dart 3.9.0 — all 16 statistics and ratings tests passed cleanly with 0 analyzer issues.
+- **Related lessons:** `[UI-003]`, `[UI-004]`, `[UI-005]`
