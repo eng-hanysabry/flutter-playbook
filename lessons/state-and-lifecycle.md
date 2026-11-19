@@ -23,7 +23,7 @@ Add verified lessons about BLoC/Cubit/Riverpod/Provider, async state, controller
   2. Passing `null` for `qty` when `qty == 0` into `copyWith` (`qty: qty ?? this.qty`) preserved the previous non-zero `this.qty` instead of resetting `dish.qty` to `0`.
   3. Computing `final targetQty = event.targetQty ?? event.qty` on variant additions ignored the existing in-cart quantity `originalQty`.
   4. Omitting `restaurantDishes` from `RestaurantState.props` caused `Equatable` to drop state emissions when only dish quantities changed.
-- **Rule:** Never overwrite a UI-owned `ValueNotifier` counter on network success (only on error rollback), pass explicit `0` (never `null`) to `copyWith` when resetting quantities, accumulate `originalQty + event.qty` when `targetQty` is omitted, and include all mutable collection fields in `Equatable.props`.
+- **Rule:** Never overwrite a UI-owned `ValueNotifier` counter on network success (only on error rollback), pass explicit `0` (never `null`) to `copyWith` when resetting quantities, accumulate `originalQty + event.qty` when `targetQty` is omitted, include all mutable collection fields in `Equatable.props`, always remove completed `_inFlightAdds` entries on normal add completion, acquire `_deletingCartItemIds` locks only at the actual delete execution site (filtering out deleting IDs during background cart refreshes), and use a stable `ValueKey` on `CounterWidget` (never keyed by `$currentQuantity`) so `CounterWidgetState` is not unmounted mid-gesture during rapid multi-tap decrement-to-delete sequences.
 - **Bad pattern:**
 
 ```dart
